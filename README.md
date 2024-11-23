@@ -1,93 +1,115 @@
-# Project Specification for DEX Arbitrage Bot
+# Cryptocurrency Arbitrage Bot Documentation
 
 ## Project Overview
+This project involves building a cryptocurrency arbitrage bot that identifies and exploits price discrepancies across various cryptocurrency exchanges. The project aims to create a semi-automated bot that will initially serve as a semestral project and later be possibly expanded into a bachelor's thesis, with a focus on improving performance and exploring decentralized finance (DeFi) opportunities.
 
-### Objective: 
-- Develop a Solidity-based arbitrage bot that identifies and exploits price discrepancies across multiple decentralized exchanges (DEXs) to generate profit. 
-- The bot will monitor prices in real-time, execute trades when profitable opportunities arise, and handle transaction validation to ensure profitability after accounting for transaction costs.
 
-## Target decentralized exchanges (DEX)
+## Table of Contents
+- [Project Scope](#project-scope)
+- [Installation and Setup](#installation-and-setup)
+- [Dependencies](#dependencies)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Arbitrage Strategies](#arbitrage-strategies)
+- [Technical Considerations](#technical-considerations)
+- [Potential Future Work](#potential-future-work)
+- [License](#license)
 
-### Selection Criteria: 
-- The bot will operate on DEXs compatible with Solidity smart contracts. 
-- Specific DEXs will be selected based on factors such as user volume, transaction fees, and supported tokens.
+## Project Scope
+- **Semestral Work**: The bot will initially use centralized exchanges (CEXs) such as Binance, Kraken, and KuCoin to identify arbitrage opportunities between exchanges. The main emphasis will be on speed and efficiency in detecting and executing profitable trades.
+- **Bachelor's Thesis Upgrade (Possibility)**: The next phase will expand to include decentralized exchanges (DEXs), potentially employing cross-exchange or cross-chain arbitrage using tools such as Web3.py and Infura. Additional strategies like flash loans may also be explored.
 
-### Interaction Method: 
-- The bot will interact with these DEXs using the most efficient methods available, whether through direct smart contract calls or other relevant APIs, as determined during the development phase.
+## Installation and Setup
+1. **Clone the Repository**
+   ```sh
+   git clone https://github.com/TUkan74/Arbitrage-bot.git
+   cd arbitrage-bot
+   ```
 
-## Arbitrage Strategy
+2. **Create a Virtual Environment**
+   ```sh
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   ```
 
-### Arbitrage Types: 
-- The bot will initially focus on simple two-way arbitrage between pairs of tokens across different DEXs. 
-- Depending on progress and complexity management, it may be expanded to include three-way arbitrage.
+3. **Install Dependencies**
+   ```sh
+   pip install -r requirements.txt
+   ```
 
-### Execution Criteria: 
-- Trades will be executed based on pre-defined profitability thresholds that account for gas fees and transaction costs. 
-- The bot will automatically abort transactions not meeting these criteria to avoid non-profitable trades.
+4. **API Keys Setup**
+   - Create an `.env` file in the root directory.
+   - Add your API keys for each exchange as follows:
+     ```
+     BINANCE_API_KEY=your_binance_api_key
+     BINANCE_API_SECRET=your_binance_api_secret
+     KRAKEN_API_KEY=your_kraken_api_key
+     KRAKEN_API_SECRET=your_kraken_api_secret
+     ```
 
-## Technology Stack
+## Dependencies
+- **Python 3.8+**
+- **CCXT**: A unified API for interacting with multiple cryptocurrency exchanges.
+- **dotenv**: To securely manage API keys and other sensitive information.
+- **aiohttp**: For making asynchronous API requests.
 
-### Development Tools: 
-- The development will utilize Solidity with Hardhat and Truffle for writing, testing, and deploying the smart contracts.
+## Configuration
+The bot can be configured by modifying the `config.json` file. Key configuration parameters include:
+- **Trading Pairs**: Specify which trading pairs the bot will focus on (e.g., `BTC/USDT`, `ETH/BTC`).
+- **Trade Threshold**: Set the minimum profit percentage required to trigger an arbitrage trade.
+- **Polling Interval**: Define the frequency at which the bot should poll exchanges for price data.
 
-### Test Networks: 
-- Initial testing will be conducted on Ethereum test networks such as Rinkeby or Ropsten to simulate transactions without real assets.
+Example `config.json`:
+```json
+{
+  "pairs": ["BTC/USDT", "ETH/USDT"],
+  "trade_threshold": 0.3,
+  "polling_interval": 1
+}
+```
 
-## API and Library Integration
+## Usage
+To start the bot, simply run the `main.py` script:
+```sh
+python main.py
+```
+### Command-Line Options
+- `--simulate`: Run the bot in simulation mode to test without real trades.
+- `--log-level`: Set the logging level (`INFO`, `DEBUG`, etc.) for more detailed output.
 
-### JavaScript Libraries:
-- The bot will utilize JavaScript-based libraries to facilitate interaction with blockchain and smart contracts. Specifically, the bot will integrate with `web3.js`, a collection of libraries that allow the application to interact with a local or remote Ethereum node using HTTP, IPC, or WebSocket.
+Example:
+```sh
+python main.py --simulate --log-level DEBUG
+```
 
-### API Integration:
-- **Web3.js**: This will be the primary library for interfacing with Ethereum blockchain. It provides the necessary tools to read and write data from smart contracts, handle blockchain events, and manage user accounts.
-- **DEX APIs**: Where direct smart contract interaction is insufficient or suboptimal, the bot may utilize APIs provided by the target DEXs. These APIs will be used for fetching real-time price data, order book information, and other relevant market data. The specific APIs will be chosen based on the DEXs selected for arbitrage opportunities.
+## Arbitrage Strategies
+1. **Inter-Exchange Arbitrage**:
+   - The bot identifies price discrepancies between different centralized exchanges and executes trades to profit from the differences.
+   - Example: Buy BTC on Kraken at a lower price and sell on Binance at a higher price.
 
-### Integration Strategy:
-- The bot will integrate `web3.js` to monitor and execute transactions directly on the Ethereum blockchain. For each target DEX, the bot will assess the availability and efficiency of using their native API versus direct smart contract interactions.
-- API responses will be handled asynchronously to ensure that the bot operates efficiently without blocking the main execution thread, allowing it to process opportunities in real-time.
+2. **Triangular Arbitrage (Future Scope)**:
+   - Triangular arbitrage involves three currency pairs within a single exchange.
+   - For instance, trading BTC for ETH, ETH for USDT, and USDT back to BTC to exploit any price imbalances.
 
-## Risk Management
+## Technical Considerations
+- **Speed Optimization**: The bot is designed with a focus on minimizing latency by:
+  - Using WebSocket APIs where available.
+  - Implementing asynchronous API calls with `aiohttp`.
+  - Hosting the bot close to exchange servers for minimal latency.
 
-### Slippage and Liquidity: 
-- Strategies will be developed to manage slippage and ensure sufficient liquidity for executing trades. 
-- Specific mechanisms will be detailed as the project progresses.
+- **Risk Management**: Key features include:
+  - **Minimum Profit Threshold**: Ensure trades are only executed when the potential profit exceeds the combined cost of trading fees.
+  - **Stop-Loss**: For reducing risks in case market conditions change unfavorably during trade execution.
 
-### Fail-Safe Mechanisms: 
-- The bot will include fail-safe operations to handle unexpected market conditions or technical failures, with specific details to be determined.
+- **Concurrency**: The bot monitors multiple pairs and exchanges concurrently using `asyncio` to ensure opportunities are not missed due to sequential processing.
 
-## Monitoring and Reporting
+## Potential Future Work
+- **Decentralized Exchanges (DEX) Integration**: Expanding the bot to work with decentralized exchanges such as Uniswap and SushiSwap, leveraging Web3 for blockchain access.
+- **Cross-Chain Arbitrage**: Utilizing tools like Polkadot bridges to find arbitrage opportunities across different blockchain networks.
+- **Flash Loans**: Incorporating flash loans for executing arbitrage opportunities in a single atomic transaction within DeFi protocols.
+- **Machine Learning**: Exploring machine learning techniques for price prediction and smarter decision-making in arbitrage opportunities.
 
-### System Monitoring: 
-- Tools and methods for monitoring the bot's operation will be defined in later stages. 
-- This may include custom dashboards or integration with existing monitoring tools.
 
-### Alerts and Notifications: 
-- The bot will implement an alert system for significant events such as large trades or system errors, with specifics to be outlined as development progresses.
+---
 
-## Compliance and Legal Considerations
-
-### Regulatory Compliance: 
-- The project will adhere to all applicable laws and regulations concerning cryptocurrency trading and DEX operations.
-
-### Security: 
-- User authentication and data security mechanisms will be considered if a web interface for the bot is developed.
-
-## Timeline
-
-### Timeline: 
-- The project is scheduled to span approximately 1 year, aligning with the completion of a bachelor's degree program. 
-- Key milestones will include the selection of target DEXs, completion of initial bot functionalities, and various phases of testing.
-
-## Testing and Deployment
-
-### Testing Strategy: 
-- The bot will undergo multiple stages of testing, starting on Ethereum test networks. 
-- Comprehensive testing will be conducted to ensure functionality, security, and profitability.
-
-### Live Deployment: 
-- After extensive testing, the bot will be deployed on the Ethereum mainnet, with real funds to verify live trading capabilities.
-
-## Future Developments and Enhancements
-
-### Scalability and New Features: 
-- Post initial deployment, plans to enhance the bot's capabilities, include scaling strategies, and additional arbitrage strategies will be considered based on initial performance and learning outcomes.
+**Disclaimer**: Cryptocurrency trading involves risk, and this bot is for educational purposes. Profitable arbitrage opportunities may vary significantly depending on market conditions, fees, and other variables.
