@@ -28,8 +28,8 @@ This project involves building a cryptocurrency arbitrage bot that identifies an
 
 2. **Create a Virtual Environment**
    ```sh
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   python3 -m venv arb_bot_venv
+   source arb_bot_venv/bin/activate  # On Windows use `arb_bot_venv\Scripts\activate`
    ```
 
 3. **Install Dependencies**
