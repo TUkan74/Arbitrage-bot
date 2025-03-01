@@ -40,4 +40,8 @@ exchange_params = {
 
 response = get_response("/exchanges",use_key,exchange_params,"https://api.coingecko.com/api/v3")
 df_ex = pd.DataFrame(response)
-print(df_ex)
+df_subset = df_ex[["id","name","country", "trade_volume_24h_btc"]]
+df_ex_subset = df_subset.sort_values(by=["trade_volume_24h_btc"],ascending=False) 
+# df_ex_subset = df_ex_subset[(df_ex_subset["trade_volume_24h_btc"] >= 10000)]
+df_ex_subset = df_ex_subset[(df_ex_subset["country"] == "United States")]
+print(df_ex_subset)
