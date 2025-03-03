@@ -4,9 +4,7 @@ PUB_URL = "https://api.coingecko.com/api/v3"
 EXCHANGES = "/exchanges"
 TICKERS = "/tickers"
 
-class Coin:
-    Id : str
-    Name : str
+
 
 
 
@@ -102,6 +100,11 @@ def convert_to_local_tz(old_ts):
 ################## MAIN API ENDPOINTS ##################
 
 def create_coin_map():
+    """
+    Creates a json file which maps coin ID and name for easier search
+
+    """
+    
     response = get_response(
         "/coins/list",
         USE_KEY,
@@ -137,6 +140,10 @@ print("==========================")
 print(str(tickers))
 
 def main():
+    """
+    Main entry point of the program
+    """
+    
     create_coin_map()
 
 
