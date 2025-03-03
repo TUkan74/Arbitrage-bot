@@ -1,14 +1,4 @@
-import pandas as pd
-import requests as rq
-import json
-import numpy as np
-import warnings
-import pytz
-import time
-import datetime
-# from IPython.display import clear_output
-pd.set_option('display.precision', 4,
-              'display.colheader_justify', 'center')
+from init.Import_packages import *
 
 PUB_URL = "https://api.coingecko.com/api/v3"
 EXCHANGES = "/exchanges"
@@ -120,9 +110,8 @@ def create_coin_map():
     )
     filtered_data = [{"id": item["id"], "name": item["name"]} for item in response]
     if response:
-        print(str(filtered_data))
-    
-    #TODO put this into a file so we can map name to id and vice versa
+        with open("documents/coin_map.json","w",encoding="utf-8") as f:
+            json.dump(filtered_data,f,indent=4,ensure_ascii=False)
 
 
 USE_KEY = {
@@ -146,3 +135,10 @@ print(df_ex_subset)
 tickers = get_tickers("ethereum","gdax","ETH","BTC")
 print("==========================")
 print(str(tickers))
+
+def main():
+    create_coin_map()
+
+
+if __name__ == "__main__":
+    main()
