@@ -1,6 +1,5 @@
 from Classes.Coin import Coin
-from init.Import_packages import json
-
+import json
 
 class Coins_map:
 
@@ -13,7 +12,7 @@ class Coins_map:
     """
 
     def __init__(self,file_path):
-        self._coins_by_id = {}
+        self.coins_by_id = {}
         self.coins_by_name = {}
 
 
@@ -26,9 +25,31 @@ class Coins_map:
 
             coin_obj = Coin(coin_id,coin_name)
 
-            self._coins_by_id[coin_id] = coin_obj
+            self.coins_by_id[coin_id] = coin_obj
             self.coins_by_name[coin_name] = coin_obj
+        print("Done")
         
     
-    def get_coin_by_id(id):
-        return 
+    def get_coin_by_id(self,_id) -> Coin | None:
+        return self.coins_by_id.get(_id)
+    
+    def get_coins_by_name(self,_name) -> Coin | None:
+        return self.coins_by_name.get(_name)
+    
+    def __repr__(self):
+        num_id_coins = len(self.coins_by_id)
+        num_name_coins = len(self.coins_by_name)
+        
+        # Take a small sample of coin IDs and names for preview
+        sample_size = 3
+        id_keys_sample = list(self.coins_by_id.keys())[:sample_size]
+        name_keys_sample = list(self.coins_by_name.keys())[:sample_size]
+        
+        return (
+            f"Coins_map("
+            f"num_id_coins={num_id_coins}, "
+            f"num_name_coins={num_name_coins}, "
+            f"coins_by_id_sample={id_keys_sample}, "
+            f"coins_by_name_sample={name_keys_sample}"
+            f")"
+        )
