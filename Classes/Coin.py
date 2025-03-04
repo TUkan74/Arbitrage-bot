@@ -5,17 +5,17 @@ class Coin:
     
     """
 
-    def __init__(self, id,name):
-        self._id = id
-        self._name = name
+    def __init__(self, _id,_name):
+        self.id = _id
+        self.name = _name
 
-    def get_name(self):
-        return self._name
+    def get_name(self) -> str:
+        return self.name
     
-    def get_id(self):
-        return self._id
+    def get_id(self) -> str:
+        return self.id
     
     def __repr__(self):
-        return f"Coin(id={self._id}, name={self._name}, symbol={self._symbol})"
+        return f"Coin(id={self.id}, name={self.name})"
     
 
