@@ -1,3 +1,4 @@
 arb_bot_venv/*
 *.ipynb
 testing/*
+documents/*
