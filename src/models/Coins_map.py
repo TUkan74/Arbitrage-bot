@@ -1,4 +1,4 @@
-from Classes.Coin import Coin
+from models.Coin import Coin
 import json
 
 class Coins_map:
@@ -11,7 +11,7 @@ class Coins_map:
         file_path (str): The file path to the coins JSON data.
     """
 
-    def __init__(self,file_path):
+    def __init__(self,file_path="documents/coin_map.json"):
         self.coins_by_id = {}
         self.coins_by_name = {}
 
@@ -28,6 +28,8 @@ class Coins_map:
             self.coins_by_id[coin_id] = coin_obj
             self.coins_by_name[coin_name] = coin_obj
         print("Done")
+
+    
         
     
     def get_coin_by_id(self,_id) -> Coin | None:
