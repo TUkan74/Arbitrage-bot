@@ -1,2 +1,4 @@
 arb_bot_venv/*
-.ipynb*
+*.ipynb
+testing/*
+documents/*
