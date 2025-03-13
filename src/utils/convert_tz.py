@@ -3,6 +3,7 @@ import time
 import datetime 
 
 class Utilities:
+    @staticmethod
     def convert_to_local_tz(old_ts) -> str:
         """
         Converts the timestamp to localized one
