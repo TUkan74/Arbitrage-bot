@@ -4,15 +4,17 @@ import json
 import requests
 import warnings
 
+
 class CoinGeckoClient:
     """
     A class for interacting with the CoinGecko API.
     """
 
-    def __init__(self, 
-                 api_key_file="src/documents/demo_key.json",
-                 base_url="https://api.coingecko.com/api/v3"):
-        
+    def __init__(
+        self,
+        api_key_file="documents/demo_key.json",
+        base_url="https://api.coingecko.com/api/v3",
+    ):
         """
         Initializes the CoinGeckoClient with an API key and a base URL.
 
@@ -24,10 +26,7 @@ class CoinGeckoClient:
         self.api_key = self._load_api_key()
         self.base_url = base_url
 
-        self.headers = {
-            "accept": "application/json",
-            "api-key": self.api_key
-        }
+        self.headers = {"accept": "application/json", "api-key": self.api_key}
 
     def _load_api_key(self):
         """
@@ -81,7 +80,7 @@ class CoinGeckoClient:
 
     def get_tickers(self, coin_id, exchange_id, base_curr, target_curr):
         """
-        Fetches the ticker data for a given coin and exchange, 
+        Fetches the ticker data for a given coin and exchange,
         filtering by base and target currencies.
 
         Args:
@@ -98,8 +97,10 @@ class CoinGeckoClient:
 
         if response and "tickers" in response:
             for ticker in response["tickers"]:
-                if (ticker.get("base") == base_curr 
-                        and ticker.get("target") == target_curr):
+                if (
+                    ticker.get("base") == base_curr
+                    and ticker.get("target") == target_curr
+                ):
                     return ticker
 
         warnings.warn(f"No data found for {base_curr}-{target_curr} on {exchange_id}")
