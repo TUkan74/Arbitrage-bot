@@ -12,7 +12,7 @@ class CoinGeckoClient:
 
     def __init__(
         self,
-        api_key_file="documents/demo_key.json",
+        api_key_file="docs/demo_key.json",
         base_url="https://api.coingecko.com/api/v3",
     ):
         """

@@ -26,7 +26,7 @@ def create_coin_map() -> Coins_map:
 
     """
     gecko_api = CoinGeckoClient()
-    json_file = "src/documents/coin_map.json"
+    json_file = "docs/coin_map.json"
 
     response = gecko_api.get_response(
         "/coins/list",
