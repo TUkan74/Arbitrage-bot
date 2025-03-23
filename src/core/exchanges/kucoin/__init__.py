@@ -1,0 +1,1 @@
+"""KuCoin exchange connector implementation."""
