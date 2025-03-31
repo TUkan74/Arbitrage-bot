@@ -12,12 +12,12 @@ pd.set_option("display.precision", 4, "display.colheader_justify", "center")
 from models.Coins_map import Coins_map
 from models.Coin import Coin
 from api.coingecko_client import CoinGeckoClient
-from utils.convert_tz import Utilities
+from utils import convert_to_local_tz
 
 # from test import test_runs
 
 gecko_client = CoinGeckoClient()
-util = Utilities()
+
 
 
 def create_coin_map() -> Coins_map:
@@ -234,7 +234,7 @@ def fetch_tickers_for_multiple_exchanges(
                 last_price=found_match["last"],
                 last_vol=found_match["volume"],
                 spread=found_match["bid_ask_spread_percentage"],
-                trade_time=util.convert_to_local_tz(old_ts),
+                trade_time=convert_to_local_tz(old_ts),
             )
             ex_all.append(temp_dict)
 

@@ -2,7 +2,7 @@
 
 import requests
 import warnings
-from utils.logging.logger import Logger
+from utils.logger import Logger
 from dotenv import load_dotenv
 import os
 

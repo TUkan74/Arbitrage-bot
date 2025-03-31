@@ -8,9 +8,10 @@ import hmac
 import hashlib
 import json
 from urllib.parse import urlencode
-from utils.logging.logger import Logger
+from utils.logger import Logger
 from dotenv import load_dotenv
 import os
+from ...enums import HttpMethod
 
 class BaseExchange(ExchangeInterface):
     """Base class for all exchanges."""
@@ -26,6 +27,9 @@ class BaseExchange(ExchangeInterface):
         # Load environment variables
         load_dotenv()
         
+        # Set up logging
+        self.logger = Logger("exchange")
+
         # Get API credentials from environment variables
         self.api_key = os.getenv(f'{exchange_name.upper()}_API_KEY')
         self.api_secret = os.getenv(f'{exchange_name.upper()}_API_SECRET')
@@ -35,7 +39,7 @@ class BaseExchange(ExchangeInterface):
         
         self.rate_limit = kwargs.get('rate_limit', 1.0)  # Default 1 request per second
         self.last_request_time = 0
-        self.logger = Logger("exchange")
+        
     
     @property
     @abstractmethod
@@ -81,7 +85,7 @@ class BaseExchange(ExchangeInterface):
         except json.JSONDecodeError:
             pass  # Not JSON response, ignore
     
-    def _make_request(self, method: str, endpoint: str, params: Optional[Dict] = None, 
+    def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:
         """
         Make an HTTP request to the exchange API
@@ -107,15 +111,15 @@ class BaseExchange(ExchangeInterface):
             headers = self._get_signed_headers(method, endpoint, params)
             
         try:
-            self.logger.debug(f"Making {method} request to {endpoint}")
-            response = requests.request(method, url, headers=headers)
+            self.logger.debug(f"Making {method.value} request to {endpoint}")
+            response = requests.request(method.value, url, headers=headers)
             self._handle_error(response)
             return response.json()
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Request failed: {str(e)}")
             raise
     
-    def _get_signed_headers(self, method: str, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
+    def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
         """
         Generate signed headers for authenticated requests
         
@@ -140,7 +144,7 @@ class BaseExchange(ExchangeInterface):
         }
     
     @abstractmethod
-    def _create_signature(self, method: str, endpoint: str, query_string: str, timestamp: str) -> str:
+    def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
         """
         Create signature for authenticated requests (to be implemented by specific exchanges)
         
@@ -158,6 +162,15 @@ class BaseExchange(ExchangeInterface):
     # Market Data Methods
     @abstractmethod
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
+        """
+        Get current ticker data for a trading pair
+        
+        Args:
+            symbol: Trading pair symbol (e.g., "BTCUSDT")
+            
+        Returns:
+            Dict containing ticker data
+        """
         pass
     
     @abstractmethod
