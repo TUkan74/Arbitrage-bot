@@ -1,21 +1,13 @@
-"""
-Core components of the arbitrage bot.
-"""
+"""Core functionality for the arbitrage bot."""
 
 from .exchanges import (
     ExchangeInterface,
     BaseExchange,
-    BinanceExchange,
-    KuCoinExchange,
-    CCXTWrapper
+    BinanceExchange
 )
-from .arbitrage import ArbitrageEngine
 
 __all__ = [
     'ExchangeInterface',
     'BaseExchange',
-    'BinanceExchange',
-    'KuCoinExchange',
-    'CCXTWrapper',
-    'ArbitrageEngine'
+    'BinanceExchange'
 ]
