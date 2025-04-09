@@ -144,6 +144,18 @@ class BaseExchange(ExchangeInterface):
         }
     
     @abstractmethod
+    def _format_symbol(self,symbol: str) -> str:
+        """
+        Convert a standard symbol format (e.g., BTC/USDT) to Exchange specific format (e.g., Binance= BTCUSDT, Kucoin= BTC-USDT)
+        
+        Args:
+            symbol: Symbol in standard format with slash separator
+            
+        Returns:
+            Symbol in Exchange specific format 
+        """
+    
+    @abstractmethod
     def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
         """
         Create signature for authenticated requests (to be implemented by specific exchanges)

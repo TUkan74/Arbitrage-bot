@@ -1,19 +1,23 @@
 from typing import Any, Dict, Optional
-from ..abstract.base_exchange import BaseExchange
-from ...enums import HttpMethod
 import hmac
 import hashlib
 import requests
 from urllib.parse import urlencode
 import base64
 import time
-import logging
+
+from .binance_normalizer import BinanceNormalizer
+from ..abstract.base_exchange import BaseExchange
+from ...enums import HttpMethod
+
+
 
 class BinanceExchange(BaseExchange):
     def __init__(self,**kwargs):
         super().__init__(
             exchange_name="BINANCE"
         )
+        self.normalizer = BinanceNormalizer()
         
     @property
     def base_url(self) -> str:
@@ -90,35 +94,7 @@ class BinanceExchange(BaseExchange):
             method=HttpMethod.GET,
             endpoint="/api/v3/exchangeInfo")
         
-        # Extract relevant information
-        symbols_info = {}
-        for symbol_data in response.get('symbols', []):
-            symbol = symbol_data.get('symbol', '')
-            # Convert Binance format to standard format
-            base = symbol_data.get('baseAsset', '')
-            quote = symbol_data.get('quoteAsset', '')
-            standard_symbol = f"{base}/{quote}"
-            
-            symbols_info[standard_symbol] = {
-                'status': symbol_data.get('status', ''),
-                'base_asset': base,
-                'quote_asset': quote,
-                'min_price': float(symbol_data.get('filters', [{}])[0].get('minPrice', 0)) 
-                    if symbol_data.get('filters') else 0,
-                'min_qty': float(symbol_data.get('filters', [{}])[1].get('minQty', 0))
-                    if len(symbol_data.get('filters', [])) > 1 else 0,
-                'base_precision': symbol_data.get('baseAssetPrecision', 8),
-                'quote_precision': symbol_data.get('quoteAssetPrecision', 8)
-            }
-        
-        normalized = {
-            'name': 'Binance',
-            'symbols': symbols_info,
-            'rate_limits': response.get('rateLimits', []),
-            'server_time': response.get('serverTime', 0)
-        }
-        
-        return normalized
+        return self.normalizer.normalize_exchange_info(response)
     
     def _format_symbol(self, symbol: str) -> str:
         """
@@ -151,23 +127,10 @@ class BinanceExchange(BaseExchange):
             endpoint="/api/v3/ticker/24hr",
             params={"symbol": binance_symbol}
         )
-        self.logger.debug(f"Raw ticker response: {response}")
+        self.logger.debug(f"Raw Binance ticker response: {response}")
         
-        # Normalize the response to match our interface
-        normalized = {
-            "symbol": symbol,  # Return the original symbol format
-            "last_price": float(response.get("lastPrice", 0)),
-            "bid": float(response.get("bidPrice", 0)),
-            "ask": float(response.get("askPrice", 0)),
-            "volume": float(response.get("volume", 0)),
-            "high": float(response.get("highPrice", 0)),
-            "low": float(response.get("lowPrice", 0)),
-            "timestamp": response.get("closeTime", 0),
-            "change_24h": float(response.get("priceChange", 0)),
-            "change_percent_24h": float(response.get("priceChangePercent", 0))
-        }
+        return self.normalizer.normalize_ticker(symbol,response)
         
-        return normalized
 
     def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
         """
@@ -188,15 +151,7 @@ class BinanceExchange(BaseExchange):
         )
         self.logger.debug(f"Raw order book response: {response}")
         
-        # Normalize the response to match our interface
-        normalized = {
-            "symbol": symbol,
-            "bids": [[float(price), float(qty)] for price, qty in response.get("bids", [])],
-            "asks": [[float(price), float(qty)] for price, qty in response.get("asks", [])],
-            "timestamp": response.get("lastUpdateId", 0)
-        }
-        
-        return normalized
+        return self.normalizer.normalize_order_book(symbol,response)
 
     def get_balance(self) -> Dict[str, float]:
         """
@@ -212,16 +167,7 @@ class BinanceExchange(BaseExchange):
         )
         self.logger.debug(f"Balance response: {response}")
         
-        # Normalize response to map asset symbols to available balances
-        balances = {}
-        for balance in response.get("balances", []):
-            asset = balance.get("asset", "")
-            free = float(balance.get("free", 0))
-            # Only include assets with non-zero balances
-            if free > 0:
-                balances[asset] = free
-                
-        return balances
+        return self.normalizer.normalize_balance(response)
     
     def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         """
@@ -246,33 +192,7 @@ class BinanceExchange(BaseExchange):
         )
         self.logger.debug(f"Trading fees response: {response}")
         
-        # Normalize response
-        fees = {}
-        
-        # Binance returns an array of fee info for each symbol
-        for fee_info in response:
-            symbol_name = fee_info.get("symbol", "")
-            # Convert to standard format
-            try:
-                # Try to match common patterns like BTCUSDT -> BTC/USDT
-                # This is a simple heuristic - a more robust approach would use the exchange info
-                for quote in ["USDT", "BTC", "ETH", "BNB", "USD", "EUR", "GBP"]:
-                    if symbol_name.endswith(quote):
-                        base = symbol_name[:-len(quote)]
-                        standard_symbol = f"{base}/{quote}"
-                        break
-                else:
-                    # Fallback to original if no match
-                    standard_symbol = symbol_name
-            except:
-                standard_symbol = symbol_name
-                
-            fees[standard_symbol] = {
-                "maker": float(fee_info.get("makerCommission", 0)),
-                "taker": float(fee_info.get("takerCommission", 0))
-            }
-            
-        return fees
+        return self.normalizer.normalize_trading_fees(response)
         
     # Required by interface but not implemented in Phase 2
     def transfer(self, currency: str, amount: float, from_account: str, 
@@ -321,19 +241,7 @@ class BinanceExchange(BaseExchange):
         )
         self.logger.debug(f"Order response: {response}")
         
-        # Normalize response
-        normalized = {
-            "id": response.get("orderId", ""),
-            "symbol": symbol,  # Return original format
-            "status": response.get("status", ""),
-            "filled": float(response.get("executedQty", 0)),
-            "remaining": float(response.get("origQty", 0)) - float(response.get("executedQty", 0)),
-            "price": float(response.get("price", 0)) if price else None,
-            "cost": float(response.get("cummulativeQuoteQty", 0)),
-            "timestamp": response.get("transactTime", 0)
-        }
-        
-        return normalized
+        return self.normalizer.normalize_order(response)
     
     def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         """
@@ -355,18 +263,7 @@ class BinanceExchange(BaseExchange):
         )
         self.logger.debug(f"Cancel order response: {response}")
         
-        # Normalize response
-        normalized = {
-            "id": response.get("orderId", ""),
-            "symbol": symbol,  # Return original format
-            "status": "canceled",
-            "filled": float(response.get("executedQty", 0)),
-            "remaining": float(response.get("origQty", 0)) - float(response.get("executedQty", 0)),
-            "cost": float(response.get("cummulativeQuoteQty", 0)),
-            "timestamp": response.get("time", 0)
-        }
-        
-        return normalized
+        return self.normalizer.normalize_order(response)
     
     def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         """
@@ -388,19 +285,7 @@ class BinanceExchange(BaseExchange):
         )
         self.logger.debug(f"Get order response: {response}")
         
-        # Normalize response
-        normalized = {
-            "id": response.get("orderId", ""),
-            "symbol": symbol,  # Return original format
-            "status": response.get("status", ""),
-            "filled": float(response.get("executedQty", 0)),
-            "remaining": float(response.get("origQty", 0)) - float(response.get("executedQty", 0)),
-            "price": float(response.get("price", 0)),
-            "cost": float(response.get("cummulativeQuoteQty", 0)),
-            "timestamp": response.get("time", 0)
-        }
-        
-        return normalized
+        return self.normalizer.normalize_order(symbol,response)
 
     def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:

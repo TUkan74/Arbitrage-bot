@@ -6,6 +6,7 @@ from .core import (
     ExchangeInterface,
     BaseExchange,
     BinanceExchange,
+    HttpMethod
     
 )
 from .api import CoinGeckoClient
