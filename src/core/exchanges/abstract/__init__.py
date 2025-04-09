@@ -1,8 +1,13 @@
 """
-Abstract base classes and interfaces for exchange implementations.
+Abstract base classes for exchange connectors.
 """
 
-from .exchange_interface import ExchangeInterface
 from .base_exchange import BaseExchange
+from .exchange_interface import ExchangeInterface
+from .response_normalizer import ResponseNormalizer
 
-__all__ = ['ExchangeInterface', 'BaseExchange']
+__all__ = [
+    'BaseExchange',
+    'ExchangeInterface',
+    'ResponseNormalizer'
+]

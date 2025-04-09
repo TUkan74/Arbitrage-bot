@@ -2,13 +2,16 @@
 Exchange implementations for different cryptocurrency exchanges.
 """
 
-from .abstract import ExchangeInterface, BaseExchange
-from .binance import BinanceExchange
+from .abstract import ExchangeInterface, BaseExchange, ResponseNormalizer
+from .binance import BinanceExchange, BinanceNormalizer
+
 
 __all__ = [
     'ExchangeInterface',
     'BaseExchange',
-    'BinanceExchange'
+    'BinanceExchange',
+    'BinanceNormalizer',
+    'ResponseNormalizer'
 ]
 
 """Exchange connectors package."""
