@@ -7,7 +7,7 @@ import base64
 import time
 
 from .binance_normalizer import BinanceNormalizer
-from ..abstract.base_exchange import BaseExchange
+from ..abstract import BaseExchange
 from ...enums import HttpMethod
 
 
@@ -65,62 +65,27 @@ class BinanceExchange(BaseExchange):
         return signature
 
     def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
-        """
-        Get headers for signed requests
-        
-        Args:
-            method: HTTP method
-            endpoint: API endpoint
-            params: Query parameters
-            
-        Returns:
-            Dict containing request headers
-        """
         # Only include the API key in headers
         headers = {
             'X-MBX-APIKEY': self.api_key
         }
         
         return headers
+    
+    def _format_symbol(self, symbol: str) -> str:
+        # Handle both formats
+        if '/' in symbol:
+            return symbol.replace('/', '')
+        return symbol
 
     def get_exchange_info(self) -> Dict[str, Any]:
-        """
-        Get exchange information and trading rules
-        
-        Returns:
-            Dict containing exchange information
-        """
         response = self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/exchangeInfo")
         
         return self.normalizer.normalize_exchange_info(response)
-    
-    def _format_symbol(self, symbol: str) -> str:
-        """
-        Convert a standard symbol format (e.g., BTC/USDT) to Binance format (e.g., BTCUSDT)
-        
-        Args:
-            symbol: Symbol in standard format with slash separator
-            
-        Returns:
-            Symbol in Binance format without separator
-        """
-        # Handle both formats
-        if '/' in symbol:
-            return symbol.replace('/', '')
-        return symbol
         
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
-        """
-        Get current ticker data for a trading pair
-        
-        Args:
-            symbol: Trading pair symbol (e.g., "BTC/USDT" or "BTCUSDT")
-            
-        Returns:
-            Dict containing normalized ticker data
-        """
         binance_symbol = self._format_symbol(symbol)
         response = self._make_request(
             method=HttpMethod.GET,
@@ -133,16 +98,7 @@ class BinanceExchange(BaseExchange):
         
 
     def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
-        """
-        Get order book data for a trading pair
-        
-        Args:
-            symbol: Trading pair symbol (e.g., "BTC/USDT" or "BTCUSDT")
-            limit: Number of orders to retrieve on each side
-            
-        Returns:
-            Dict containing normalized order book data
-        """
+       
         binance_symbol = self._format_symbol(symbol)
         response = self._make_request(
             method=HttpMethod.GET,
@@ -154,12 +110,7 @@ class BinanceExchange(BaseExchange):
         return self.normalizer.normalize_order_book(symbol,response)
 
     def get_balance(self) -> Dict[str, float]:
-        """
-        Get account balances
         
-        Returns:
-            Dict mapping asset symbols to available balances
-        """
         response = self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/account",
@@ -170,15 +121,7 @@ class BinanceExchange(BaseExchange):
         return self.normalizer.normalize_balance(response)
     
     def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
-        """
-        Get trading fees for a symbol or all symbols
         
-        Args:
-            symbol: Trading pair symbol (e.g., "BTC/USDT" or "BTCUSDT") or None for all
-            
-        Returns:
-            Dict mapping symbols to their fee rates (maker and taker)
-        """
         params = {}
         if symbol:
             binance_symbol = self._format_symbol(symbol)
@@ -208,19 +151,7 @@ class BinanceExchange(BaseExchange):
     
     def place_order(self, symbol: str, order_type: str, side: str, 
                    amount: float, price: Optional[float] = None) -> Dict[str, Any]:
-        """
-        Place a new order on the exchange
         
-        Args:
-            symbol: Trading pair symbol (e.g., "BTC/USDT" or "BTCUSDT")
-            order_type: Type of order ('LIMIT', 'MARKET')
-            side: Order side ('BUY', 'SELL')
-            amount: Quantity to trade
-            price: Price for limit orders (None for market orders)
-            
-        Returns:
-            Dict containing order details
-        """
         binance_symbol = self._format_symbol(symbol)
         params = {
             "symbol": binance_symbol, 
@@ -244,16 +175,7 @@ class BinanceExchange(BaseExchange):
         return self.normalizer.normalize_order(response)
     
     def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-        """
-        Cancel an existing order
-        
-        Args:
-            order_id: ID of the order to cancel
-            symbol: Trading pair symbol (e.g., "BTC/USDT" or "BTCUSDT")
-            
-        Returns:
-            Dict containing cancellation confirmation
-        """
+
         binance_symbol = self._format_symbol(symbol)
         response = self._make_request(
             method=HttpMethod.DELETE,
@@ -266,16 +188,7 @@ class BinanceExchange(BaseExchange):
         return self.normalizer.normalize_order(response)
     
     def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-        """
-        Get the status of an order
-        
-        Args:
-            order_id: ID of the order to check
-            symbol: Trading pair symbol (e.g., "BTC/USDT" or "BTCUSDT")
-            
-        Returns:
-            Dict containing order details
-        """
+
         binance_symbol = self._format_symbol(symbol)
         response = self._make_request(
             method=HttpMethod.GET,
