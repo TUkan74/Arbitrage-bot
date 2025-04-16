@@ -85,40 +85,24 @@ class BaseExchange(ExchangeInterface):
         except json.JSONDecodeError:
             pass  # Not JSON response, ignore
     
+    @abstractmethod
     def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:
         """
-        Make an HTTP request to the exchange API
+        Make an HTTP request to the exchange API.
         
         Args:
             method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint
-            params: Query parameters
+            params: Query parameters or request body
             headers: Request headers
             signed: Whether to sign the request
             
         Returns:
             Dict containing the API response
         """
-        self._handle_rate_limit()
-        
-        url = f"{self.base_url}{endpoint}"
-        if params:
-            query_string = urlencode(params)
-            url = f"{url}?{query_string}"
-            
-        if signed and self.api_key and self.api_secret:
-            headers = self._get_signed_headers(method, endpoint, params)
-            
-        try:
-            self.logger.debug(f"Making {method.value} request to {endpoint}")
-            response = requests.request(method.value, url, headers=headers)
-            self._handle_error(response)
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Request failed: {str(e)}")
-            raise
     
+    @abstractmethod
     def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
         """
         Generate signed headers for authenticated requests
@@ -131,17 +115,6 @@ class BaseExchange(ExchangeInterface):
         Returns:
             Dict containing signed headers
         """
-        timestamp = str(int(time.time() * 1000))
-        query_string = urlencode(params) if params else ""
-        
-        # Create signature string (exchange-specific implementations will override this)
-        signature = self._create_signature(method, endpoint, query_string, timestamp)
-        
-        return {
-            'X-API-KEY': self.api_key,
-            'X-TIMESTAMP': timestamp,
-            'X-SIGNATURE': signature
-        }
     
     @abstractmethod
     def _format_symbol(self,symbol: str) -> str:
