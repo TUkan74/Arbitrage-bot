@@ -105,7 +105,7 @@ class BinanceExchange(BaseExchange):
             endpoint="/api/v3/depth",
             params={"symbol": binance_symbol, "limit": limit}
         )
-        self.logger.debug(f"Raw order book response: {response}")
+        self.logger.debug(f"Raw Binance order book response: {response}")
         
         return self.normalizer.normalize_order_book(symbol,response)
 

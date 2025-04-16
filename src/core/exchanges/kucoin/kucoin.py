@@ -10,17 +10,20 @@ import time
 import logging
 
 from ..abstract import BaseExchange
-from ...enums import HttpMethods
+from ...enums import HttpMethod
+from .kucoin_normalizer import KucoinNormalizer
 
 class Kucoin(BaseExchange):
-    def __init__(self,**kwargs):
-        super().__init__(
-            exchange_name="KUCOIN"
-        )
+    def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None, **kwargs):
+        super().__init__(exchange_name="KUCOIN")
+        self.normalizer = KucoinNormalizer()
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.passphrase = kwargs.get('passphrase')
     
     @property
-    def base_url(self)-> str:
-        return "https://api.kucoin.com/"
+    def base_url(self) -> str:
+        return "https://api.kucoin.com"
     
     def _format_symbol(self, symbol: str) -> str:
         if '/' in symbol:
@@ -30,8 +33,14 @@ class Kucoin(BaseExchange):
             raise Exception("Incorrect format of symbol pair")
     
     def get_exchange_info(self) -> Dict[str, Any]:
-        #TODO Implement
-        pass
+        
+        response = self._make_request(
+            method=HttpMethod.GET,
+            endpoint="/api/v1/symbols"
+        )
+        self.logger.debug(f"Raw KuCoin exchange info response: {response}")
+        
+        return self.normalizer.normalize_exchange_info(response)
 
     def get_ticker(self,symbol : str) -> Dict[str,Any]:
 
@@ -39,19 +48,24 @@ class Kucoin(BaseExchange):
         response = self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v1/market/orderbook/level1",
-            params={"symbol" : kucoin_symbol}
+            params={"symbol": kucoin_symbol}
         )
         self.logger.debug(f"Raw Kucoin ticker response: {response}")
         
-        data = response.get("data",{})
+        data = response.get("data", {})
         
-        #TODO normalizer for Kucoin
+        return self.normalizer.normalize_ticker(symbol, data)
 
-        return data
-    
     def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
-        #TODO Implement
-        pass
+        kucoin_symbol = self._format_symbol(symbol)
+        response = self._make_request(
+            method=HttpMethod.GET,
+            endpoint=f"/api/v1/market/orderbook/level2_{limit}",
+            params={"symbol": kucoin_symbol}
+        )
+        self.logger.debug(f"Raw Kucoin order book response")
+
+        return self.normalizer.normalize_order_book(symbol,response)
 
     def get_balance(self) -> Dict[str, float]:
         #TODO Implement
