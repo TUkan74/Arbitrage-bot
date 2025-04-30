@@ -175,7 +175,7 @@ class KucoinExchange(BaseExchange):
         #TODO Implement
         pass
 
-    def get_trading_fees(self, symbol: str | None = None) -> Dict[str, float]:
+    def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         #TODO Implement
         pass
 
