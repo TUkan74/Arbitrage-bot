@@ -1,8 +1,8 @@
 """KuCoin exchange connector implementation."""
 
-from .kucoin import Kucoin
+from .kucoin import KucoinExchange
 from .kucoin_normalizer import KucoinNormalizer
 
-__all__ = ["KuCoin", 
-           "KuCoinNormalizer"
+__all__ = ["KucoinExchange", 
+           "KucoinNormalizer"
            ]

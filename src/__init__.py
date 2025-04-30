@@ -7,7 +7,7 @@ from .core import (
     BaseExchange,
     BinanceExchange,
     BinanceNormalizer,
-    Kucoin,
+    KucoinExchange,
     KucoinNormalizer,
     HttpMethod
     
@@ -22,7 +22,7 @@ __all__ = [
     'BaseExchange',
     'BinanceExchange',
     'BinanceNormalizer',
-    'Kucoin',
+    'KucoinExchange',
     'KucoinNormalizer',
     'CCXTWrapper',
     'ArbitrageEngine',

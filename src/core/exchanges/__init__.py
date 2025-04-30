@@ -4,7 +4,7 @@ Exchange implementations for different cryptocurrency exchanges.
 
 from .abstract import ExchangeInterface, BaseExchange, ResponseNormalizer
 from .binance import BinanceExchange, BinanceNormalizer
-from .kucoin import Kucoin, KucoinNormalizer
+from .kucoin import KucoinExchange, KucoinNormalizer
 
 
 __all__ = [
@@ -13,7 +13,7 @@ __all__ = [
     'BinanceExchange',
     'BinanceNormalizer',
     'ResponseNormalizer',
-    'Kucoin',
+    'KucoinExchange',
     'KucoinNormalizer'
 ]
 

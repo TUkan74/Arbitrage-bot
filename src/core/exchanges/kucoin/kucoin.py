@@ -236,5 +236,9 @@ class KucoinExchange(BaseExchange):
         )
         return self.normalizer.normalize_order(symbol, response)
 
+    def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
+        self.logger.warning("Method withdraw() not implemented in Phase 2")
+        return {"success": False, "message": "Method not implemented in Phase 2"}
+
     
 

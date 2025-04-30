@@ -115,6 +115,7 @@ class BaseExchange(ExchangeInterface):
         Returns:
             Dict containing signed headers
         """
+
     
     @abstractmethod
     def _format_symbol(self,symbol: str) -> str:
