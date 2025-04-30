@@ -1,10 +1,17 @@
-import pytest
-import os
+"""
+Pytest configuration and fixtures
+"""
 import sys
+import os
+import pytest
 
-# Add the src directory to the Python path
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add the project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+src_path = os.path.join(project_root, 'src')
+sys.path.insert(0, project_root)
 sys.path.insert(0, src_path)
+
+# Define common fixtures here if needed
 
 @pytest.fixture(autouse=True)
 def mock_env_vars():

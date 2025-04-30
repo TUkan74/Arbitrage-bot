@@ -5,7 +5,7 @@ from .exchanges import (
     BaseExchange,
     BinanceExchange,
     BinanceNormalizer,
-    Kucoin,
+    KucoinExchange,
     KucoinNormalizer
 )
 
@@ -14,6 +14,6 @@ __all__ = [
     'BaseExchange',
     'BinanceExchange',
     'BinanceNormalizer',
-    'Kucoin',
+    'KucoinExchange',
     'KucoinNormalizer'
 ]
