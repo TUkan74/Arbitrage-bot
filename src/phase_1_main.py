@@ -9,7 +9,7 @@ import time
 # from IPython.display import clear_output
 pd.set_option("display.precision", 4, "display.colheader_justify", "center")
 
-from models.Coins_map import Coins_map
+# from models.Coins_map import Coins_map
 from models.Coin import Coin
 from api.coingecko_client import CoinGeckoClient
 from utils import convert_to_local_tz
@@ -20,11 +20,11 @@ gecko_client = CoinGeckoClient()
 
 
 
-def create_coin_map() -> Coins_map:
-    """
-    Creates a json file which maps coin ID and name for easier search
+"""def create_coin_map() -> Coins_map:
+    
+    # Creates a json file which maps coin ID and name for easier search
 
-    """
+    
     gecko_api = CoinGeckoClient()
     json_file = "docs/coin_map.json"
 
@@ -38,7 +38,7 @@ def create_coin_map() -> Coins_map:
 
     result_map = Coins_map(json_file)
     # print(result_map)
-    return result_map
+    return result_map"""
 
 
 def run_program():
