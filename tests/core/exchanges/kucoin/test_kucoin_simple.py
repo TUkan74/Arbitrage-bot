@@ -120,6 +120,18 @@ class MockKucoinExchange(MockBaseExchange):
             return {"data": {"orderId": "123456"}}
         elif endpoint.startswith("/api/v1/hf/orders/"):
             return {"data": {"id": "123456", "status": "open"}}
+        elif endpoint == "/api/v1/trade-fees":
+            # Mock response for trading fees
+            if params and "symbols" in params:
+                symbols = params["symbols"].split(",")
+                data = []
+                for symbol in symbols:
+                    data.append({
+                        "symbol": symbol,
+                        "takerFeeRate": "0.001",
+                        "makerFeeRate": "0.0008"
+                    })
+                return {"data": data}
         
         return {}
         
@@ -147,6 +159,33 @@ class MockKucoinExchange(MockBaseExchange):
             params={"symbol": kucoin_symbol}
         )
         return self.normalizer.normalize_order_book(symbol, response)
+        
+    def get_trading_fees(self, symbol=None):
+        """Mock implementation of get_trading_fees for testing"""
+        if symbol:
+            kucoin_symbol = self._format_symbol(symbol)
+            response = self._make_request(
+                method=HttpMethod.GET,
+                endpoint="/api/v1/trade-fees",
+                params={"symbols": kucoin_symbol}
+            )
+        else:
+            # For simplicity in the mock, just return fees for BTC-USDT
+            response = self._make_request(
+                method=HttpMethod.GET,
+                endpoint="/api/v1/trade-fees",
+                params={"symbols": "BTC-USDT"}
+            )
+            
+        result = {}
+        for fee_info in response.get("data", []):
+            std_symbol = fee_info["symbol"].replace("-", "/")
+            result[std_symbol] = {
+                "maker": float(fee_info["makerFeeRate"]),
+                "taker": float(fee_info["takerFeeRate"])
+            }
+            
+        return result
 
 # Test fixture
 @pytest.fixture
@@ -204,4 +243,20 @@ def test_get_order_book(kucoin):
     assert result["symbol"] == "BTC/USDT"
     assert result["bids"] == [[49999.0, 1.5], [49998.0, 2.0]]
     assert result["asks"] == [[50001.0, 1.0], [50002.0, 2.5]]
-    assert result["timestamp"] == 1234567890 
+    assert result["timestamp"] == 1234567890
+
+def test_get_trading_fees(kucoin):
+    """Test getting trading fees for a specific symbol"""
+    result = kucoin.get_trading_fees("BTC/USDT")
+    
+    assert "BTC/USDT" in result
+    assert "maker" in result["BTC/USDT"]
+    assert "taker" in result["BTC/USDT"]
+    assert result["BTC/USDT"]["maker"] == 0.0008
+    assert result["BTC/USDT"]["taker"] == 0.001
+    
+    # Test getting all trading fees (simplified in our mock)
+    all_fees = kucoin.get_trading_fees()
+    assert "BTC/USDT" in all_fees
+    assert all_fees["BTC/USDT"]["maker"] == 0.0008
+    assert all_fees["BTC/USDT"]["taker"] == 0.001 

@@ -176,8 +176,75 @@ class KucoinExchange(BaseExchange):
         pass
 
     def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
-        #TODO Implement
-        pass
+        """
+        Get trading fees for a symbol or multiple symbols
+        
+        Args:
+            symbol: Trading pair symbol (e.g., "BTC/USDT") or None
+            
+        Returns:
+            Dict containing fee rates for maker and taker for the requested symbol(s)
+        """
+        if symbol:
+            kucoin_symbol = self._format_symbol(symbol)
+            params = {"symbols": kucoin_symbol}
+            
+            response = self._make_request(
+                method=HttpMethod.GET,
+                endpoint="/api/v1/trade-fees",
+                params=params,
+                signed=True
+            )
+            
+            result = {}
+            for fee_info in response.get("data", []):
+                std_symbol = fee_info["symbol"].replace("-", "/")
+                result[std_symbol] = {
+                    "maker": float(fee_info["makerFeeRate"]),
+                    "taker": float(fee_info["takerFeeRate"])
+                }
+                
+            return result
+        
+        else:
+            exchange_info = self.get_exchange_info()
+            all_symbols = []
+            
+            for symbol_info in exchange_info.get("symbols", []):
+                if symbol_info.get("status") == "TRADING":  
+                    all_symbols.append(symbol_info["symbol"].replace("/", "-"))
+            
+            if not all_symbols:
+                return {}  
+            
+            result = {}
+            
+            symbol_batches = [all_symbols[i:i+10] for i in range(0, len(all_symbols), 10)]
+            
+            for batch in symbol_batches:
+                params = {"symbols": ",".join(batch)}
+                
+                try:
+                    response = self._make_request(
+                        method=HttpMethod.GET,
+                        endpoint="/api/v1/trade-fees",
+                        params=params,
+                        signed=True
+                    )
+                    
+                    for fee_info in response.get("data", []):
+                        std_symbol = fee_info["symbol"].replace("-", "/")
+                        result[std_symbol] = {
+                            "maker": float(fee_info["makerFeeRate"]),
+                            "taker": float(fee_info["takerFeeRate"])
+                        }
+                    
+                    self._handle_rate_limit()
+                    
+                except Exception as e:
+                    self.logger.error(f"Error fetching fees for batch: {e}")
+            
+            return result
 
     def transfer(self, currency: str, amount: float, from_account: str, to_account: str) -> Dict[str, Any]:
         #TODO Implement

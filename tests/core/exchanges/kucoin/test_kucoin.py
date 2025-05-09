@@ -206,4 +206,77 @@ def test_get_order(kucoin):
         called_args = mock_request.call_args
         assert called_args[1]["method"] == HttpMethod.GET
         assert called_args[1]["endpoint"] == f"/api/v1/hf/orders/{order_id}"
-        assert called_args[1]["signed"] == True 
+        assert called_args[1]["signed"] == True
+
+def test_get_trading_fees(kucoin):
+    """Test getting trading fees with a mocked API response"""
+    # Mock response for a single symbol
+    single_symbol_response = {
+        "data": [
+            {
+                "symbol": "BTC-USDT",
+                "takerFeeRate": "0.001",
+                "makerFeeRate": "0.0008"
+            }
+        ]
+    }
+    
+    # Test getting fees for a specific symbol
+    with patch.object(kucoin, '_make_request') as mock_request:
+        mock_request.return_value = single_symbol_response
+        
+        # Test with a specific symbol
+        result = kucoin.get_trading_fees("BTC/USDT")
+        
+        # Verify the request was made correctly
+        called_args = mock_request.call_args
+        assert called_args[1]["method"] == HttpMethod.GET
+        assert called_args[1]["endpoint"] == "/api/v1/trade-fees"
+        assert called_args[1]["signed"] == True
+        assert called_args[1]["params"]["symbols"] == "BTC-USDT"
+        
+        # Verify the result is correctly formatted
+        assert "BTC/USDT" in result
+        assert result["BTC/USDT"]["maker"] == 0.0008
+        assert result["BTC/USDT"]["taker"] == 0.001
+    
+    # Mock response for multiple symbols (for the all symbols test)
+    # We will make a simplified test that only tests the first batch
+    exchange_info_response = {
+        "data": [
+            {"symbol": "BTC-USDT", "baseCurrency": "BTC", "quoteCurrency": "USDT", "enableTrading": True},
+            {"symbol": "ETH-USDT", "baseCurrency": "ETH", "quoteCurrency": "USDT", "enableTrading": True}
+        ]
+    }
+    
+    multi_symbol_response = {
+        "data": [
+            {
+                "symbol": "BTC-USDT",
+                "takerFeeRate": "0.001",
+                "makerFeeRate": "0.0008"
+            },
+            {
+                "symbol": "ETH-USDT",
+                "takerFeeRate": "0.001",
+                "makerFeeRate": "0.0008"
+            }
+        ]
+    }
+    
+    # Test getting all fees (we'll simplify and just test the logic)
+    with patch.object(kucoin, '_make_request') as mock_request:
+        # Set up the mock to return different responses for different calls
+        mock_request.side_effect = lambda **kwargs: (
+            exchange_info_response if kwargs.get("endpoint") == "/api/v1/symbols"
+            else multi_symbol_response
+        )
+        
+        # Call get_trading_fees without a symbol argument
+        result = kucoin.get_trading_fees()
+        
+        # Verify the result contains both symbols
+        assert "BTC/USDT" in result
+        assert "ETH/USDT" in result
+        assert result["BTC/USDT"]["maker"] == 0.0008
+        assert result["ETH/USDT"]["taker"] == 0.001 
