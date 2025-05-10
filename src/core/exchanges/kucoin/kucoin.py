@@ -29,7 +29,7 @@ class KucoinExchange(BaseExchange):
         # Sign the passphrase if credentials are provided
         if api_passphrase and api_secret:
             self.api_passphrase = self._sign_passphrase(api_passphrase)
-        
+    
     @property
     def base_url(self) -> str:
         return "https://api.kucoin.com"
@@ -100,7 +100,7 @@ class KucoinExchange(BaseExchange):
             "KC-API-KEY-VERSION": "2",
             "Content-Type": "application/json"
         }
-        
+    
     def _format_symbol(self, symbol: str) -> str:
         return symbol.replace('/', '-')
         
@@ -171,10 +171,28 @@ class KucoinExchange(BaseExchange):
         )
         return self.normalizer.normalize_order_book(symbol, response)
         
-    def get_balance(self) -> Dict[str, float]:
-        #TODO Implement
-        pass
+    def get_balance(self, account_id: Optional[str] = None,currency: Optional[str] = None) -> Dict[str, float]:
+        if account_id:
+            response = self._make_request(
+                method=HttpMethod.GET,
+                endpoint=f"/api/v1/accounts/{account_id}",
+                params={"currency": currency if currency else None}
+                )
+        else:
+            response = self._make_request(
+                method=HttpMethod.GET,
+                endpoint="/api/v1/accounts",
+                params={"currency": currency if currency else None}
+                )
+        return self.normalizer.normalize_balance(response)
 
+    def get_account_id(self) -> str:
+        response = self._make_request(
+            method=HttpMethod.GET,
+            endpoint="/api/v1/accounts"
+            )
+        return self.normalizer.normalize_account_id(response)
+    
     def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         """
         Get trading fees for a symbol or multiple symbols
@@ -247,7 +265,7 @@ class KucoinExchange(BaseExchange):
             return result
 
     def transfer(self, currency: str, amount: float, from_account: str, to_account: str) -> Dict[str, Any]:
-        #TODO Implement
+        #TODO Implement Not right now, to be implemented in phase 3
         pass
 
     def place_order(self, symbol: str, order_type: str, side: str, amount: float, price: Optional[float] = None) -> Dict[str, Any]:
