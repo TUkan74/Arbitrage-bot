@@ -105,7 +105,7 @@ class BinanceExchange(BaseExchange):
             endpoint="/api/v3/depth",
             params={"symbol": binance_symbol, "limit": limit}
         )
-        self.logger.debug(f"Raw Binance order book response: {response}")
+        # self.logger.debug(f"Raw Binance order book response: {response}")
         
         return self.normalizer.normalize_order_book(symbol,response)
 
@@ -129,7 +129,7 @@ class BinanceExchange(BaseExchange):
             
         response = self._make_request(
             method=HttpMethod.GET,
-            endpoint="/api/v3/tradeFee",
+            endpoint="/sapi/v1/asset/tradeFee",
             params=params,
             signed=True
         )
@@ -223,28 +223,46 @@ class BinanceExchange(BaseExchange):
         url = f"{base}{endpoint}"
         
         # Add timestamp and signature for signed requests
-        if signed and self.api_key:
-            timestamp = str(int(time.time() * 1000))
+        if signed and self.api_key and self.api_secret:
             if params is None:
                 params = {}
-            params['timestamp'] = timestamp
+                
+            # Add timestamp parameter required by Binance
+            params['timestamp'] = str(int(time.time() * 1000))
             
-            # Get signed headers
-            headers = self._get_signed_headers(method, endpoint, params)
+            # Add recvWindow parameter for better reliability (optional)
+            params['recvWindow'] = '5000'
             
-            # Add signature to params for Ed25519
-            if hasattr(self, 'private_key') and self.private_key:
-                query_string = urlencode(params)
-                signature = self._create_signature(method, endpoint, query_string, timestamp)
-                params['signature'] = signature
+            # Create the query string without the signature
+            query_string = urlencode(params)
             
-            url = f"{url}?{urlencode(params)}"
-        elif params:
-            url = f"{url}?{urlencode(params)}"
+            # Create signature
+            signature = hmac.new(
+                self.api_secret.encode('utf-8'),
+                query_string.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
             
+            # Add the signature to the parameters
+            params['signature'] = signature
+            
+            # Set headers with API key
+            headers = {
+                'X-MBX-APIKEY': self.api_key
+            }
+            
+        # Handle request based on HTTP method
         try:
             self.logger.debug(f"Making {method.value} request to {url}")
-            response = requests.request(method.value, url, headers=headers)
+            
+            if method in [HttpMethod.GET, HttpMethod.DELETE]:
+                if params:
+                    response = requests.request(method.value, url, params=params, headers=headers)
+                else:
+                    response = requests.request(method.value, url, headers=headers)
+            else:  # POST, PUT
+                response = requests.request(method.value, url, data=params, headers=headers)
+                
             self._handle_error(response)
             return response.json()
         except requests.exceptions.RequestException as e:

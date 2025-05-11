@@ -18,6 +18,8 @@ class Logger:
             self.file_path = "logs/arbitrage/arbitrage.log"
         elif self.type == "trades":
             self.file_path = "logs/trades/trades.log"
+        elif self.type == "main":
+            self.file_path = "logs/main/main.log"
     
     # # # # # # # # # # 
     # General methods # 

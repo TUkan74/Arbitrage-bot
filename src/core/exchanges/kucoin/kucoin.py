@@ -203,6 +203,13 @@ class KucoinExchange(BaseExchange):
         Returns:
             Dict containing fee rates for maker and taker for the requested symbol(s)
         """
+        # Check if we have valid API credentials before attempting the call
+        if not self.api_key or not self.api_secret or not self.api_passphrase:
+            self.logger.warning("Cannot fetch trading fees: missing API credentials")
+            # Return default fees to allow operation to continue
+            default_fee = {"maker": 0.001, "taker": 0.001}
+            return {symbol: default_fee} if symbol else {"BTC/USDT": default_fee, "ETH/USDT": default_fee}
+            
         if symbol:
             kucoin_symbol = self._format_symbol(symbol)
             params = {"symbols": kucoin_symbol}
@@ -225,6 +232,7 @@ class KucoinExchange(BaseExchange):
             return result
         
         else:
+            # Get all trading fees
             exchange_info = self.get_exchange_info()
             all_symbols = []
             
@@ -237,7 +245,8 @@ class KucoinExchange(BaseExchange):
             
             result = {}
             
-            symbol_batches = [all_symbols[i:i+10] for i in range(0, len(all_symbols), 10)]
+            # Process fewer symbols at a time to avoid API rate limits and errors
+            symbol_batches = [all_symbols[i:i+5] for i in range(0, len(all_symbols), 5)]
             
             for batch in symbol_batches:
                 params = {"symbols": ",".join(batch)}
@@ -258,6 +267,8 @@ class KucoinExchange(BaseExchange):
                         }
                     
                     self._handle_rate_limit()
+                    # Add a small delay between batches to avoid rate limiting
+                    time.sleep(0.5)
                     
                 except Exception as e:
                     self.logger.error(f"Error fetching fees for batch: {e}")

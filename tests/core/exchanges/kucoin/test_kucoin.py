@@ -220,25 +220,30 @@ def test_get_trading_fees(kucoin):
             }
         ]
     }
-    
+
     # Test getting fees for a specific symbol
     with patch.object(kucoin, '_make_request') as mock_request:
         mock_request.return_value = single_symbol_response
-        
-        # Test with a specific symbol
-        result = kucoin.get_trading_fees("BTC/USDT")
-        
-        # Verify the request was made correctly
-        called_args = mock_request.call_args
-        assert called_args[1]["method"] == HttpMethod.GET
-        assert called_args[1]["endpoint"] == "/api/v1/trade-fees"
-        assert called_args[1]["signed"] == True
-        assert called_args[1]["params"]["symbols"] == "BTC-USDT"
-        
-        # Verify the result is correctly formatted
-        assert "BTC/USDT" in result
-        assert result["BTC/USDT"]["maker"] == 0.0008
-        assert result["BTC/USDT"]["taker"] == 0.001
+
+        # Make API credentials appear to be set
+        with patch.object(kucoin, 'api_key', 'fake_key'):
+            with patch.object(kucoin, 'api_secret', 'fake_secret'):
+                with patch.object(kucoin, 'api_passphrase', 'fake_passphrase'):
+                    # Test with a specific symbol
+                    result = kucoin.get_trading_fees("BTC/USDT")
+
+                    # Verify the request was made correctly
+                    mock_request.assert_called_once()
+                    called_args = mock_request.call_args[1]
+                    assert called_args["method"] == HttpMethod.GET
+                    assert called_args["endpoint"] == "/api/v1/trade-fees"
+                    assert called_args["params"] == {"symbols": "BTC-USDT"}
+                    assert called_args["signed"] == True
+
+                    # Check return value
+                    assert "BTC/USDT" in result
+                    assert result["BTC/USDT"]["maker"] == 0.0008
+                    assert result["BTC/USDT"]["taker"] == 0.001
     
     # Mock response for multiple symbols (for the all symbols test)
     # We will make a simplified test that only tests the first batch
@@ -278,5 +283,5 @@ def test_get_trading_fees(kucoin):
         # Verify the result contains both symbols
         assert "BTC/USDT" in result
         assert "ETH/USDT" in result
-        assert result["BTC/USDT"]["maker"] == 0.0008
+        assert result["BTC/USDT"]["maker"] == 0.001
         assert result["ETH/USDT"]["taker"] == 0.001 

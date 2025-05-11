@@ -29,6 +29,8 @@ class BaseExchange(ExchangeInterface):
         
         # Set up logging
         self.logger = Logger("exchange")
+        self.logger.clear_log()
+        self.logger.info("Cleared log file")
 
         # Get API credentials from environment variables
         self.api_key = os.getenv(f'{exchange_name.upper()}_API_KEY')
