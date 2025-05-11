@@ -1,0 +1,3 @@
+"""
+KuCoin exchange tests
+""" 
