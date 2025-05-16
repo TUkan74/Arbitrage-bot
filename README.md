@@ -113,3 +113,167 @@ python main.py --simulate --log-level DEBUG
 ---
 
 **Disclaimer**: Cryptocurrency trading involves risk, and this bot is for educational purposes. Profitable arbitrage opportunities may vary significantly depending on market conditions, fees, and other variables.
+
+# Arbitrage Bot - Phase 2
+
+This project implements a cryptocurrency arbitrage bot that identifies and analyzes price differences across multiple exchanges. Phase 2 adds custom exchange connectors and an arbitrage engine.
+
+## Features
+
+- Custom exchange connectors for Binance and KuCoin
+- Abstract exchange interface design for easy addition of new exchanges
+- Asynchronous arbitrage engine to scan for opportunities
+- Slippage and fee estimation for accurate profit calculation
+- Advanced logging with different levels (DEBUG, INFO, WARNING, ERROR)
+- Configuration via environment variables
+
+## Project Structure
+
+```
+.
+├── src/
+│   ├── core/
+│   │   ├── arbitrage/
+│   │   │   └── engine.py         # Arbitrage scanning engine
+│   │   ├── exchanges/
+│   │   │   ├── abstract/
+│   │   │   │   ├── exchange_interface.py  # Interface contract
+│   │   │   │   └── base_exchange.py      # Common functionality
+│   │   │   ├── binance/
+│   │   │   │   ├── binance.py          # Binance connector
+│   │   │   │   └── binance_normalizer.py  # Response normalizer
+│   │   │   └── kucoin/
+│   │   │       ├── kucoin.py           # KuCoin connector
+│   │   │       └── kucoin_normalizer.py   # Response normalizer
+│   │   └── enums.py               # Common enumerations
+│   ├── utils/
+│   │   ├── logger.py              # Custom logging utility
+│   │   └── timezone.py            # Timezone conversion utility
+│   ├── phase_1_main.py            # Phase 1 entry point
+│   └── phase_2_main.py            # Phase 2 entry point
+└── .env                           # Environment configuration (not in repo)
+```
+
+## Setup
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/arbitrage-bot.git
+   cd arbitrage-bot
+   ```
+
+2. Create a virtual environment:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+4. Create a `.env` file with your API keys and configuration:
+   ```
+   # Exchange API Keys
+   BINANCE_API_KEY=your_binance_api_key
+   BINANCE_API_SECRET=your_binance_api_secret
+   
+   KUCOIN_API_KEY=your_kucoin_api_key
+   KUCOIN_API_SECRET=your_kucoin_api_secret
+   KUCOIN_API_PASSPHRASE=your_kucoin_passphrase
+   
+   # Additional CCXT Exchanges
+   ADDITIONAL_EXCHANGES=huobi,bitget
+   HUOBI_API_KEY=your_huobi_api_key
+   HUOBI_API_SECRET=your_huobi_api_secret
+   BITGET_API_KEY=your_bitget_api_key
+   BITGET_API_SECRET=your_bitget_api_secret
+   BITGET_API_PASSPHRASE=your_bitget_passphrase
+   
+   # Arbitrage Settings
+   ARBITRAGE_INITIAL_CAPITAL=1000
+   ARBITRAGE_MIN_PROFIT=0.5
+   ARBITRAGE_MAX_SLIPPAGE=0.5
+   ARBITRAGE_SCAN_INTERVAL=10
+   ARBITRAGE_TARGET_SYMBOLS=BTC/USDT,ETH/USDT,XRP/USDT
+   ```
+
+## Running the Bot
+
+```
+python src/phase_2_main.py
+```
+
+## Using Additional Exchanges (CCXT)
+
+The bot supports both custom exchange connectors (Binance, KuCoin) and any exchange supported by the CCXT library. To use additional exchanges:
+
+1. Add the exchange names to the `ADDITIONAL_EXCHANGES` variable in your `.env` file:
+   ```
+   ADDITIONAL_EXCHANGES=huobi,bitget,bybit,okx
+   ```
+
+2. Add API credentials for each exchange:
+   ```
+   HUOBI_API_KEY=your_huobi_api_key
+   HUOBI_API_SECRET=your_huobi_api_secret
+   
+   # Some exchanges require additional authentication parameters
+   BITGET_API_KEY=your_bitget_api_key
+   BITGET_API_SECRET=your_bitget_api_secret
+   BITGET_API_PASSPHRASE=your_bitget_passphrase
+   ```
+
+3. The bot will automatically initialize these exchanges using the CCXT wrapper
+
+### Supported CCXT Exchanges
+
+The bot can work with any exchange supported by CCXT, including:
+- Binance
+- KuCoin
+- Huobi
+- Bitget
+- OKX
+- Bybit
+- Kraken
+- And many more
+
+## Enhanced Logging
+
+The bot now provides more detailed logs to help you understand what's happening:
+
+1. **Symbol Discovery Logs**: Detailed information about available trading pairs across exchanges
+2. **Market Data Logs**: Updates on order book fetching with price information
+3. **Opportunity Scanning Logs**: Detailed logs of price comparisons, favorable differences, and potential profits
+4. **Summary Logs**: At the end of each scan, a summary of comparisons and opportunities found
+
+You can see these logs in the console and in the log files under the `logs/` directory.
+
+## Adding a New Exchange
+
+1. Create a new folder under `src/core/exchanges/` for your exchange
+2. Create an exchange connector class that extends `BaseExchange`
+3. Implement a normalizer class for standardizing API responses
+4. Add the exchange to `phase_2_main.py`
+
+## Configuration Options
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ARBITRAGE_INITIAL_CAPITAL` | Starting capital for calculations | 1000.0 |
+| `ARBITRAGE_MIN_PROFIT` | Minimum profit threshold (%) | 0.5 |
+| `ARBITRAGE_MAX_SLIPPAGE` | Maximum acceptable slippage (%) | 0.5 |
+| `ARBITRAGE_SCAN_INTERVAL` | Time between scans (seconds) | 10.0 |
+| `ARBITRAGE_TARGET_SYMBOLS` | Trading pairs to monitor (comma-separated) | None (auto-discover) |
+| `ADDITIONAL_EXCHANGES` | CCXT exchanges to use (comma-separated) | None |
+
+## Phase 2 Development Goals
+
+- [x] Abstract exchange interface
+- [x] Base exchange with common functionality
+- [x] Custom exchange connectors (Binance, KuCoin)
+- [x] Arbitrage engine
+- [x] Opportunity detection
+- [x] Profit calculation with fees and slippage
+- [ ] Actual trade execution (planned for Phase 3)

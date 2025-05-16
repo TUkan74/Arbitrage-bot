@@ -1,47 +1,44 @@
 # file: coingecko_client.py
 
-import json
 import requests
 import warnings
+from utils.logger import Logger
+from dotenv import load_dotenv
+import os
+
 
 class CoinGeckoClient:
     """
     A class for interacting with the CoinGecko API.
     """
 
-    def __init__(self, 
-                 api_key_file="src/documents/demo_key.json",
-                 base_url="https://api.coingecko.com/api/v3"):
-        
+    def __init__(
+        self,
+        base_url="https://api.coingecko.com/api/v3",
+    ):
         """
         Initializes the CoinGeckoClient with an API key and a base URL.
 
         Args:
-            api_key_file (str): Path to the JSON file containing the API key.
             base_url (str): The base URL for the CoinGecko API.
         """
-        self.api_key_file = api_key_file
-        self.api_key = self._load_api_key()
+        # Load environment variables
+        load_dotenv()
+        
+        # Create logger
+        self.logger = Logger("exchange")
+
+        # Get API key from environment
+        self.api_key = os.getenv('COINGECKO_API_KEY')
+        if not self.api_key:
+            self.logger.warning("No CoinGecko API key found in environment variables")
+        
         self.base_url = base_url
 
-        self.headers = {
-            "accept": "application/json",
-            "api-key": self.api_key
-        }
-
-    def _load_api_key(self):
-        """
-        Loads and returns the CoinGecko API key from a JSON file.
-
-        Args:
-            file_path (str): Path to the JSON file containing the API key.
-
-        Returns:
-            str: The CoinGecko API key.
-        """
-        with open(self.api_key_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data["coingecko_api_key"]
+        # Set up headers with API key if available
+        self.headers = {"accept": "application/json"}
+        if self.api_key:
+            self.headers["api-key"] = self.api_key
 
     def get_response(self, endpoint, params=None):
         """
@@ -57,11 +54,17 @@ class CoinGeckoClient:
         params = params or {}
         url = f"{self.base_url}{endpoint}"
 
-        response = requests.get(url, headers=self.headers, params=params)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Failed to get data from {url} with code {response.status_code}")
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 429:
+                self.logger.warning("Rate limit exceeded.")
+            else:
+                self.logger.error(f"Failed to get data from {url} with code {response.status_code}")
+            return None
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Request failed: {str(e)}")
             return None
 
     def get_exchanges(self, page=1, per_page=250):
@@ -81,7 +84,7 @@ class CoinGeckoClient:
 
     def get_tickers(self, coin_id, exchange_id, base_curr, target_curr):
         """
-        Fetches the ticker data for a given coin and exchange, 
+        Fetches the ticker data for a given coin and exchange,
         filtering by base and target currencies.
 
         Args:
@@ -98,11 +101,13 @@ class CoinGeckoClient:
 
         if response and "tickers" in response:
             for ticker in response["tickers"]:
-                if (ticker.get("base") == base_curr 
-                        and ticker.get("target") == target_curr):
+                if (
+                    ticker.get("base") == base_curr
+                    and ticker.get("target") == target_curr
+                ):
                     return ticker
 
-        warnings.warn(f"No data found for {base_curr}-{target_curr} on {exchange_id}")
+        self.logger.warning(f"No data found for {base_curr}-{target_curr} on {exchange_id}")
         return None
 
     def list_coins(self):
