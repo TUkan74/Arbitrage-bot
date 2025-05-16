@@ -127,11 +127,14 @@ class ArbitrageEngine:
     
     async def _discover_tradable_symbols(self):
         """Discover tradable symbols common across all exchanges with filtering."""
+        self.logger.info(f"Discovering tradable symbols across {len(self.exchanges)} exchanges")
         all_symbols = {}
+        exchange_counts = {}
         
         # Fetch symbols from each exchange
         for exchange_name, exchange in self.exchanges.items():
             try:
+                self.logger.info(f"Fetching available symbols from {exchange_name}")
                 # Get exchange info with all available symbols
                 exchange_info = await self._async_call(exchange.get_exchange_info)
                 
@@ -154,6 +157,11 @@ class ArbitrageEngine:
                         if (quote in ['USDT', 'BTC', 'ETH'] and 
                             not any(x in symbol for x in ['3L', '3S', 'UP', 'DOWN', 'BULL', 'BEAR'])):
                             filtered_symbols.append(symbol)
+                            
+                            # Track symbol counts across exchanges
+                            if symbol not in exchange_counts:
+                                exchange_counts[symbol] = 0
+                            exchange_counts[symbol] += 1
                 
                 all_symbols[exchange_name] = set(filtered_symbols)
                 self.logger.info(f"Found {len(filtered_symbols)} filtered symbols for {exchange_name}")
@@ -165,9 +173,15 @@ class ArbitrageEngine:
         if all_symbols:
             if len(all_symbols) > 1:
                 common_symbols = set.intersection(*all_symbols.values())
+                self.logger.info(f"Found {len(common_symbols)} symbols common to ALL exchanges")
+                
+                # Also find symbols available on at least 2 exchanges
+                symbols_on_multiple = [s for s, count in exchange_counts.items() if count >= 2]
+                self.logger.info(f"Found {len(symbols_on_multiple)} symbols available on at least 2 exchanges")
             else:
                 # If we only have one exchange, use its symbols
                 common_symbols = next(iter(all_symbols.values()))
+                self.logger.info(f"Only one exchange available, using its {len(common_symbols)} symbols")
                 
             # Further limit to most common trading pairs for testing
             major_pairs = [
@@ -175,23 +189,41 @@ class ArbitrageEngine:
                 "ADA/USDT", "DOT/USDT", "SOL/USDT", "DOGE/USDT", "MATIC/USDT"
             ]
             limited_symbols = [s for s in common_symbols if s in major_pairs]
+            self.logger.debug(f"Major trading pairs available: {limited_symbols}")
             
             # Use limited symbols if available, otherwise top 20 from common symbols
             if limited_symbols:
                 self.target_symbols = limited_symbols
+                self.logger.info(f"Using {len(limited_symbols)} major trading pairs")
+            elif len(common_symbols) > 0:
+                # If we don't have major pairs but have common symbols, use those
+                common_list = list(common_symbols)
+                self.target_symbols = common_list[:20]  # Limit to 20 pairs for testing
+                self.logger.info(f"Using top {len(self.target_symbols)} common symbols")
+                if self.target_symbols:
+                    self.logger.debug(f"Selected symbols: {', '.join(self.target_symbols[:5])}...")
+            elif len(symbols_on_multiple) > 0:
+                # If we don't have common symbols across all exchanges, use ones on multiple exchanges
+                self.target_symbols = symbols_on_multiple[:20]
+                self.logger.info(f"Using {len(self.target_symbols)} symbols available on multiple exchanges")
             else:
-                self.target_symbols = list(common_symbols)[:20]  # Limit to 20 pairs for testing
-                
-            self.logger.info(f"Discovered {len(self.target_symbols)} trading symbols to monitor")
+                # Fallback to some known common symbols
+                self.target_symbols = ["BTC/USDT", "ETH/USDT"]
+                self.logger.warning(f"No common symbols found, using fallback symbols: {self.target_symbols}")
         else:
             self.logger.warning("No symbols discovered from exchanges")
             # Fallback to some known common symbols
             self.target_symbols = ["BTC/USDT", "ETH/USDT"]
             self.logger.info(f"Using fallback symbols: {self.target_symbols}")
+            
+        self.logger.info(f"Discovered {len(self.target_symbols)} trading symbols to monitor")
     
     async def _update_market_data(self):
         """Update all market data (order books, fees) asynchronously with better error handling."""
+        self.logger.info(f"Updating market data for {len(self.target_symbols)} symbols across {len(self.exchanges)} exchanges")
+        start_time = time.time()
         tasks = []
+        successful_updates = 0
         
         # Update order books for non-failed symbols
         for symbol in self.target_symbols:
@@ -205,12 +237,21 @@ class ArbitrageEngine:
         
         # Update trading fees if not cached - don't try too frequently
         if not self.trading_fees_cache or time.time() - self.last_fee_update > 3600:
+            self.logger.info("Updating trading fees for all exchanges")
             self.last_fee_update = time.time()
             for exchange_name, exchange in self.exchanges.items():
                 tasks.append(self._async_update_trading_fees(exchange_name, exchange))
         
         # Wait for all tasks to complete
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Count successful updates
+        for result in results:
+            if isinstance(result, bool) and result:
+                successful_updates += 1
+                
+        elapsed = time.time() - start_time
+        self.logger.info(f"Market data update completed in {elapsed:.2f}s - {successful_updates}/{len(tasks)} updates successful")
     
     async def _async_update_order_book(self, exchange_name: str, exchange: ExchangeInterface, symbol: str):
         """Fetch and cache order book for a symbol on an exchange with better error handling."""
@@ -221,7 +262,7 @@ class ArbitrageEngine:
             if not order_book.get('bids') or not order_book.get('asks'):
                 # Empty order book, log but don't count as error
                 self.logger.debug(f"Empty order book for {exchange_name} {symbol}")
-                return
+                return False
                 
             # Cache the result with timestamp
             if symbol not in self.order_books_cache:
@@ -231,6 +272,15 @@ class ArbitrageEngine:
                 'data': order_book,
                 'timestamp': time.time()
             }
+            
+            # Log the mid-price of the order book (average of best bid and ask)
+            bid = order_book['bids'][0][0] if order_book['bids'] else 0
+            ask = order_book['asks'][0][0] if order_book['asks'] else 0
+            if bid > 0 and ask > 0:
+                mid_price = (bid + ask) / 2
+                self.logger.debug(f"Updated order book for {exchange_name} {symbol} - Price: {mid_price}")
+            
+            return True
         except Exception as e:
             # Track failed symbols
             if exchange_name not in self.failed_symbols:
@@ -243,6 +293,8 @@ class ArbitrageEngine:
                 self.logger.error(f"Failed to update order book for {exchange_name} {symbol}: {str(e)}")
             elif len(self.failed_symbols[exchange_name]) == 11:
                 self.logger.warning(f"Suppressing further order book errors for {exchange_name} (too many to log)")
+            
+            return False
     
     async def _async_update_trading_fees(self, exchange_name: str, exchange: ExchangeInterface):
         """Fetch and cache trading fees for an exchange."""
@@ -250,8 +302,12 @@ class ArbitrageEngine:
             fees = await self._async_call(exchange.get_trading_fees)
             if fees:  # Only update if we got a valid response
                 self.trading_fees_cache[exchange_name] = fees
+                self.logger.debug(f"Updated trading fees for {exchange_name} - {len(fees)} symbols")
+                return True
+            return False
         except Exception as e:
             self.logger.error(f"Failed to update trading fees for {exchange_name}: {str(e)}")
+            return False
     
     async def _async_call(self, func, *args, **kwargs):
         """Helper to call synchronous exchange methods asynchronously."""
@@ -391,6 +447,10 @@ class ArbitrageEngine:
             List of opportunity dictionaries
         """
         opportunities = []
+        total_comparisons = 0
+        price_favorable_count = 0
+        
+        self.logger.info(f"Scanning {len(self.target_symbols)} symbols across {len(self.exchanges)} exchanges for arbitrage opportunities")
         
         for symbol in self.target_symbols:
             # Skip if we don't have order book data
@@ -400,11 +460,15 @@ class ArbitrageEngine:
             # Get exchanges with order books for this symbol
             exchange_names = list(self.order_books_cache[symbol].keys())
             
+            # Log which exchanges we're comparing for this symbol
+            self.logger.debug(f"Analyzing {symbol} across {len(exchange_names)} exchanges: {', '.join(exchange_names)}")
+            
             # Compare all exchange pairs
             for i in range(len(exchange_names)):
                 for j in range(i + 1, len(exchange_names)):
                     buy_exchange = exchange_names[i]
                     sell_exchange = exchange_names[j]
+                    total_comparisons += 1
                     
                     # Get order books
                     buy_book = self.order_books_cache[symbol][buy_exchange]['data']
@@ -418,29 +482,55 @@ class ArbitrageEngine:
                     buy_price = buy_book['asks'][0][0]
                     sell_price = sell_book['bids'][0][0]
                     
-                    # Quick check if there's potential profit
-                    if sell_price <= buy_price:
+                    # Log the price comparison
+                    self.logger.debug(f"Comparing {symbol}: {buy_exchange} ask={buy_price} vs {sell_exchange} bid={sell_price}")
+                    
+                    # Check if there's potential profit (before fees/slippage)
+                    direction = None
+                    if sell_price > buy_price:
+                        direction = "normal"
+                        price_difference_pct = ((sell_price - buy_price) / buy_price) * 100
+                        self.logger.debug(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
+                        price_favorable_count += 1
+                    else:
                         # Check reverse direction
                         buy_price_reverse = sell_book['asks'][0][0]
                         sell_price_reverse = buy_book['bids'][0][0]
                         
-                        if sell_price_reverse <= buy_price_reverse:
-                            # No opportunity in either direction
-                            continue
-                        else:
+                        if sell_price_reverse > buy_price_reverse:
+                            direction = "reverse"
                             # Swap exchanges for reverse direction
                             buy_exchange, sell_exchange = sell_exchange, buy_exchange
                             buy_price, sell_price = buy_price_reverse, sell_price_reverse
+                            price_difference_pct = ((sell_price - buy_price) / buy_price) * 100
+                            self.logger.debug(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
+                            price_favorable_count += 1
+                        else:
+                            # No opportunity in either direction
+                            continue
                     
                     # Calculate detailed profit with fees and slippage
                     profit, profit_percentage, buy_slippage, sell_slippage = await self.calculate_potential_profit(
                         symbol, buy_exchange, sell_exchange, self.initial_capital
                     )
                     
+                    # Log the detailed calculation results
+                    self.logger.debug(
+                        f"Calculated profit for {symbol} ({buy_exchange}->{sell_exchange}): "
+                        f"${profit:.2f} ({profit_percentage:.2f}%) - "
+                        f"Buy slippage: {buy_slippage:.2%}, Sell slippage: {sell_slippage:.2%}"
+                    )
+                    
                     # Check if profitable enough and slippage is acceptable
                     if (profit_percentage >= self.min_profit_percentage and 
                         buy_slippage <= self.max_slippage/100 and 
                         sell_slippage <= self.max_slippage/100):
+                        
+                        self.logger.info(
+                            f"💰 Found profitable opportunity for {symbol}: "
+                            f"Buy on {buy_exchange} @ {buy_price}, Sell on {sell_exchange} @ {sell_price}, "
+                            f"Expected profit: ${profit:.2f} ({profit_percentage:.2f}%)"
+                        )
                         
                         opportunity = {
                             'symbol': symbol,
@@ -466,6 +556,9 @@ class ArbitrageEngine:
                                 asyncio.create_task(self.opportunity_callback(opportunity))
                             except Exception as e:
                                 self.logger.error(f"Error in opportunity callback: {str(e)}")
+        
+        # Add a summary log
+        self.logger.info(f"Scan complete: {total_comparisons} comparisons, {price_favorable_count} favorable price differences, {len(opportunities)} viable opportunities")
         
         return opportunities
     

@@ -40,7 +40,7 @@ async def main():
     and starts scanning for opportunities.
     """
     # Setup logger
-    logger = Logger("arbitrage")
+    logger = Logger("main")
     logger.info("Starting Arbitrage Bot - Phase 2")
     
     # Load environment variables
