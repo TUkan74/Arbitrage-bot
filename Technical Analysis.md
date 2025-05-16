@@ -132,7 +132,7 @@ This approach should show deep **technical mastery** in custom connector design 
        
 3. **Phase 3: Refine Code \+ Simplified Trading (Optional) (\~4–6 weeks after phase 2\)**  
    	  
-   * **Overview:** Refine the existing connectors, introduce simplified trading features (such as paper trading or small-scale live trades), and handle more sophisticated issues like fees, slippage, and partial fills. This phase marks the transition from mere opportunity detection to more realistic scenarios.  
+   * **Overview:** Refine the existing connectors, introduce simplified trading features (such as paper trading or small-scale live trades), and handle issues like fees, slippage, and partial fills. This phase marks the transition from mere opportunity detection to realistic scenarios.  
        
    * **Coding:**   
      1. Connector Enhancements: Improve error handling (e.g., rate limits, timeouts), handle partial fills more gracefully, incorporate security best practices for API keys.  
