@@ -26,15 +26,14 @@ This project involves building a cryptocurrency arbitrage bot that identifies an
    cd arbitrage-bot
    ```
 
-2. **Create a Virtual Environment**
+2. **Install Poetry**
    ```sh
-   python3 -m venv arb_bot_venv
-   source arb_bot_venv/bin/activate  # On Windows use `arb_bot_venv\Scripts\activate`
+   pip isntall poetry
    ```
 
 3. **Install Dependencies**
    ```sh
-   pip install -r requirements.txt
+   poetry install
    ```
 
 4. **API Keys Setup**
@@ -71,7 +70,7 @@ Example `config.json`:
 ## Usage
 To start the bot, simply run the `main.py` script:
 ```sh
-python main.py
+poetry run python main.py
 ```
 ### Command-Line Options
 - `--simulate`: Run the bot in simulation mode to test without real trades.
@@ -79,7 +78,7 @@ python main.py
 
 Example:
 ```sh
-python main.py --simulate --log-level DEBUG
+poetry run python main.py --simulate --log-level DEBUG
 ```
 
 ## Arbitrage Strategies
@@ -162,15 +161,14 @@ This project implements a cryptocurrency arbitrage bot that identifies and analy
    cd arbitrage-bot
    ```
 
-2. Create a virtual environment:
+2. Install Poetry (if not already installed):
    ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install poetry
    ```
 
-3. Install dependencies:
+3. Install dependencies using Poetry:
    ```
-   pip install -r requirements.txt
+   poetry install
    ```
 
 4. Create a `.env` file with your API keys and configuration:
@@ -201,9 +199,15 @@ This project implements a cryptocurrency arbitrage bot that identifies and analy
 
 ## Running the Bot
 
-```
-python src/phase_2_main.py
-```
+1. Activate the Poetry virtual environment:
+   ```
+   poetry shell
+   ```
+
+2. Run the bot:
+   ```
+   poetry run python src/phase_2_main.py
+   ```
 
 ## Using Additional Exchanges (CCXT)
 
@@ -277,3 +281,51 @@ You can see these logs in the console and in the log files under the `logs/` dir
 - [x] Opportunity detection
 - [x] Profit calculation with fees and slippage
 - [ ] Actual trade execution (planned for Phase 3)
+
+## Development
+
+### Adding Dependencies
+
+To add new dependencies:
+```bash
+# Add a production dependency
+poetry add package-name
+
+# Add a development dependency
+poetry add --group dev package-name
+```
+
+### Running Tests
+
+```bash
+poetry run pytest
+```
+
+### Code Formatting
+
+The project uses Black for code formatting and isort for import sorting. To format your code:
+
+```bash
+poetry run black .
+poetry run isort .
+```
+
+### Type Checking
+
+The project uses mypy for type checking:
+
+```bash
+poetry run mypy .
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and ensure code formatting
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
