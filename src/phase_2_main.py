@@ -137,6 +137,7 @@ async def main():
         raise
     finally:
         logger.info("Shutting down Arbitrage Bot")
+        
 
 if __name__ == "__main__":
     # Run the async main function
