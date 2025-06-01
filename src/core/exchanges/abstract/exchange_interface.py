@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Union
+import aiohttp
 
 
 class ExchangeInterface(ABC):
@@ -10,7 +11,17 @@ class ExchangeInterface(ABC):
     """
     
     @abstractmethod
-    def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None, **kwargs):
+    async def __aenter__(self):
+        """Async context manager entry"""
+        pass
+
+    @abstractmethod
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        pass
+    
+    @abstractmethod
+    async def initialize(self, api_key: Optional[str] = None, api_secret: Optional[str] = None, **kwargs):
         """
         Initialize the exchange connector with credentials
         
@@ -26,7 +37,7 @@ class ExchangeInterface(ABC):
     #
     
     @abstractmethod
-    def get_ticker(self, symbol: str) -> Dict[str, Any]:
+    async def get_ticker(self, symbol: str) -> Dict[str, Any]:
         """
         Get current ticker data for a trading pair
         
@@ -44,7 +55,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
+    async def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
         """
         Get order book data for a trading pair
         
@@ -61,7 +72,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def get_exchange_info(self) -> Dict[str, Any]:
+    async def get_exchange_info(self) -> Dict[str, Any]:
         """
         Get exchange information and trading rules
         
@@ -79,7 +90,7 @@ class ExchangeInterface(ABC):
     #
     
     @abstractmethod
-    def get_balance(self) -> Dict[str, float]:
+    async def get_balance(self) -> Dict[str, float]:
         """
         Get account balances
         
@@ -89,7 +100,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
+    async def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         """
         Get trading fees for a symbol or all symbols
         
@@ -102,7 +113,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def place_order(self, symbol: str, order_type: str, side: str, 
+    async def place_order(self, symbol: str, order_type: str, side: str, 
                    amount: float, price: Optional[float] = None) -> Dict[str, Any]:
         """
         Place a new order on the exchange
@@ -124,7 +135,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+    async def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         """
         Cancel an existing order
         
@@ -138,7 +149,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+    async def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         """
         Get the status of an order
         
@@ -156,7 +167,7 @@ class ExchangeInterface(ABC):
     #
     
     @abstractmethod
-    def transfer(self, currency: str, amount: float, from_account: str, 
+    async def transfer(self, currency: str, amount: float, from_account: str, 
                 to_account: str) -> Dict[str, Any]:
         """
         Transfer funds between accounts within the same exchange
@@ -173,7 +184,7 @@ class ExchangeInterface(ABC):
         pass
     
     @abstractmethod
-    def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
+    async def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
         """
         Withdraw funds from the exchange
         

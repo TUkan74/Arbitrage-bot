@@ -163,24 +163,56 @@ class BinanceNormalizer(ResponseNormalizer):
         """
         fees = {}
         
-        for symbol_fee in raw_response:
-            symbol = symbol_fee.get('symbol', '')
-            if not symbol:
-                continue
-                
-            # Convert Binance format (BTCUSDT) to standard format (BTC/USDT)
-            # Try to identify base and quote from common patterns
-            if len(symbol) >= 6:  # Most pairs are at least 6 chars
-                for quote in ['USDT', 'BUSD', 'USDC', 'BTC', 'ETH', 'BNB']:
-                    if symbol.endswith(quote):
-                        base = symbol[:-len(quote)]
-                        standard_symbol = f"{base}/{quote}"
+        # Handle response as list of fee objects
+        if isinstance(raw_response, list):
+            for symbol_fee in raw_response:
+                symbol = symbol_fee.get('symbol', '')
+                if not symbol:
+                    continue
+                    
+                # Convert Binance format (BTCUSDT) to standard format (BTC/USDT)
+                # Try to identify base and quote from common patterns
+                if len(symbol) >= 6:  # Most pairs are at least 6 chars
+                    for quote in ['USDT', 'BUSD', 'USDC', 'BTC', 'ETH', 'BNB']:
+                        if symbol.endswith(quote):
+                            base = symbol[:-len(quote)]
+                            standard_symbol = f"{base}/{quote}"
+                            
+                            fees[standard_symbol] = {
+                                'maker': float(symbol_fee.get('makerCommission', 0.001)),
+                                'taker': float(symbol_fee.get('takerCommission', 0.001))
+                            }
+                            break
+        # Handle response as object with data array
+        elif isinstance(raw_response, dict):
+            fee_data = raw_response.get('data', [])
+            if isinstance(fee_data, list):
+                for symbol_fee in fee_data:
+                    symbol = symbol_fee.get('symbol', '')
+                    if not symbol:
+                        continue
                         
-                        fees[standard_symbol] = {
-                            'maker': float(symbol_fee.get('makerCommission', 0.001)),
-                            'taker': float(symbol_fee.get('takerCommission', 0.001))
-                        }
-                        break
+                    # Convert Binance format (BTCUSDT) to standard format (BTC/USDT)
+                    # Try to identify base and quote from common patterns
+                    if len(symbol) >= 6:  # Most pairs are at least 6 chars
+                        for quote in ['USDT', 'BUSD', 'USDC', 'BTC', 'ETH', 'BNB']:
+                            if symbol.endswith(quote):
+                                base = symbol[:-len(quote)]
+                                standard_symbol = f"{base}/{quote}"
+                                
+                                fees[standard_symbol] = {
+                                    'maker': float(symbol_fee.get('makerCommission', 0.001)),
+                                    'taker': float(symbol_fee.get('takerCommission', 0.001))
+                                }
+                                break
+        
+        # If no fees were found, return default fees for common pairs
+        if not fees:
+            default_fee = {'maker': 0.001, 'taker': 0.001}
+            fees = {
+                'BTC/USDT': default_fee,
+                'ETH/USDT': default_fee
+            }
             
         return fees
         
