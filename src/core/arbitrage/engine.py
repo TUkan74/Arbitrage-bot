@@ -326,41 +326,44 @@ class ArbitrageEngine:
         Returns:
             Estimated slippage as a percentage
         """
-        total_amount = 0
-        weighted_price = 0
-        target_amount = amount
 
         if side == 'buy':
-            for price, size in order_book.get('asks', []):
-                if total_amount < target_amount:
-                    fill_amount = min(size, target_amount - total_amount)
-                    total_amount += fill_amount
-                    weighted_price += price * fill_amount
-                else:
-                    break
-                    
-            if total_amount > 0:
-                average_price = weighted_price / total_amount
-                best_ask = order_book['asks'][0][0] if order_book.get('asks') else 0
-                if best_ask > 0:
-                    slippage = (average_price - best_ask) / best_ask
-                    return slippage
+            slippage = self.calculate_slippage('asks', order_book, amount)
         else:  # sell
-            for price, size in order_book.get('bids', []):
-                if total_amount < target_amount:
-                    fill_amount = min(size, target_amount - total_amount)
-                    total_amount += fill_amount
-                    weighted_price += price * fill_amount
-                else:
-                    break
+            slippage = self.calculate_slippage('bids', order_book, amount)
+            
+        return slippage
+    
+    def calculate_slippage(self,action : str, order_book: Dict[str, Any], target_amount: float):
+        """
+        Calculate slippage based on the order book depth.
+        
+        Args:
+            action: 'asks' or 'bids'
+            order_book: Order book data with bids and asks
+            target_amount: Amount to buy/sell
+            
+        Returns:
+            Estimated slippage as a percentage
+        """
+        
+        total_amount = 0
+        weighted_price = 0
+        
+        for price, size in order_book.get(action, []):
+            if total_amount < target_amount:
+                fill_amount = min(size, target_amount - total_amount)
+                total_amount += fill_amount
+                weighted_price += price * fill_amount
+            else:
+                break
                     
             if total_amount > 0:
                 average_price = weighted_price / total_amount
-                best_bid = order_book['bids'][0][0] if order_book.get('bids') else 0
+                best_bid = order_book[action][0][0] if order_book.get(action) else 0
                 if best_bid > 0:
                     slippage = (best_bid - average_price) / best_bid
                     return slippage
-                    
         return 0
     
     async def calculate_potential_profit(
