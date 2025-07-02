@@ -13,13 +13,14 @@ class Logger:
         self.type = type
         self.use_colors_in_file = use_colors_in_file
         if self.type == "exchange":
-            self.file_path = "logs/exchanges/exchange.log"
+            self.file_path = "logs/exchanges/exchange.log"  
         elif self.type == "arbitrage":
             self.file_path = "logs/arbitrage/arbitrage.log"
         elif self.type == "trades":
             self.file_path = "logs/trades/trades.log"
         elif self.type == "main":
             self.file_path = "logs/main/main.log"
+        self.clear_log()
     
     # # # # # # # # # # 
     # General methods # 
