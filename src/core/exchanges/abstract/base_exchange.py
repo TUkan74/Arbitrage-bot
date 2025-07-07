@@ -30,8 +30,7 @@ class BaseExchange(ExchangeInterface):
         
         # Set up logging
         self.logger = Logger("exchange")
-        self.logger.clear_log()
-        self.logger.info("Cleared log file")
+        self.logger.info("Exchange initialized")
 
         self.exchange_name = exchange_name
         self.session: Optional[aiohttp.ClientSession] = None

@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 import hmac
 import hashlib
-import requests
+import aiohttp
 from urllib.parse import urlencode
 import base64
 import time
@@ -28,7 +28,7 @@ class BinanceExchange(BaseExchange):
         """Base URL for public market data endpoints"""
         return "https://data-api.binance.vision"
 
-    def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
+    async def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
         """
         Create signature for Binance API requests using either HMAC-SHA256 or Ed25519
         
@@ -64,7 +64,7 @@ class BinanceExchange(BaseExchange):
         
         return signature
 
-    def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
+    async def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
         # Only include the API key in headers
         headers = {
             'X-MBX-APIKEY': self.api_key
@@ -78,16 +78,16 @@ class BinanceExchange(BaseExchange):
             return symbol.replace('/', '')
         return symbol
 
-    def get_exchange_info(self) -> Dict[str, Any]:
-        response = self._make_request(
+    async def get_exchange_info(self) -> Dict[str, Any]:
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/exchangeInfo")
         
         return self.normalizer.normalize_exchange_info(response)
         
-    def get_ticker(self, symbol: str) -> Dict[str, Any]:
+    async def get_ticker(self, symbol: str) -> Dict[str, Any]:
         binance_symbol = self._format_symbol(symbol)
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/ticker/24hr",
             params={"symbol": binance_symbol}
@@ -97,10 +97,10 @@ class BinanceExchange(BaseExchange):
         return self.normalizer.normalize_ticker(symbol,response)
         
 
-    def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
+    async def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
        
         binance_symbol = self._format_symbol(symbol)
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/depth",
             params={"symbol": binance_symbol, "limit": limit}
@@ -109,9 +109,9 @@ class BinanceExchange(BaseExchange):
         
         return self.normalizer.normalize_order_book(symbol,response)
 
-    def get_balance(self) -> Dict[str, float]:
+    async def get_balance(self) -> Dict[str, float]:
         
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/account",
             signed=True
@@ -120,14 +120,14 @@ class BinanceExchange(BaseExchange):
         
         return self.normalizer.normalize_balance(response)
     
-    def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
+    async def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         
         params = {}
         if symbol:
             binance_symbol = self._format_symbol(symbol)
             params["symbol"] = binance_symbol
             
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/sapi/v1/asset/tradeFee",
             params=params,
@@ -138,18 +138,18 @@ class BinanceExchange(BaseExchange):
         return self.normalizer.normalize_trading_fees(response)
         
     # Required by interface but not implemented in Phase 2
-    def transfer(self, currency: str, amount: float, from_account: str, 
+    async def transfer(self, currency: str, amount: float, from_account: str, 
                 to_account: str) -> Dict[str, Any]:
         """Not implemented in Phase 2"""
         self.logger.warning("Method not implemented in Phase 2")
         return {"success": False, "message": "Method not implemented in Phase 2"}
     
-    def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
+    async def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
         """Not implemented in Phase 2"""
         self.logger.warning("Method not implemented in Phase 2")
         return {"success": False, "message": "Method not implemented in Phase 2"}
     
-    def place_order(self, symbol: str, order_type: str, side: str, 
+    async def place_order(self, symbol: str, order_type: str, side: str, 
                    amount: float, price: Optional[float] = None) -> Dict[str, Any]:
         
         binance_symbol = self._format_symbol(symbol)
@@ -164,7 +164,7 @@ class BinanceExchange(BaseExchange):
             params["price"] = price
             params["timeInForce"] = "GTC"  # Good Till Cancelled
             
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.POST,
             endpoint="/api/v3/order",
             params=params,
@@ -174,10 +174,10 @@ class BinanceExchange(BaseExchange):
         
         return self.normalizer.normalize_order(response)
     
-    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+    async def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
 
         binance_symbol = self._format_symbol(symbol)
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.DELETE,
             endpoint="/api/v3/order",
             params={"orderId": order_id, "symbol": binance_symbol},
@@ -187,10 +187,10 @@ class BinanceExchange(BaseExchange):
         
         return self.normalizer.normalize_order(response)
     
-    def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+    async def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
 
         binance_symbol = self._format_symbol(symbol)
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/order",
             params={"orderId": order_id, "symbol": binance_symbol},
@@ -200,74 +200,74 @@ class BinanceExchange(BaseExchange):
         
         return self.normalizer.normalize_order(symbol,response)
 
-    def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
+    async def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:
         """
         Override base _make_request to use different base URLs for public/private endpoints
         """
-        self._handle_rate_limit()
-        
-        # Use public data URL for public market data endpoints
-        if not signed and (endpoint.startswith("/api/v3/ticker") or 
-                          endpoint.startswith("/api/v3/depth") or
-                          endpoint.startswith("/api/v3/exchangeInfo") or
-                          endpoint == "api/v3/exchangeInfo"):
-            base = self.public_data_url
-        else:
-            base = self.base_url
+        if not self.session:
+            raise RuntimeError("Session not initialized. Use 'async with' or call initialize()")
             
-        # Ensure endpoint starts with a slash
-        if not endpoint.startswith('/'):
-            endpoint = '/' + endpoint
+        async with self.request_semaphore:  # Rate limiting
+            await self._handle_rate_limit()
             
-        url = f"{base}{endpoint}"
-        
-        # Add timestamp and signature for signed requests
-        if signed and self.api_key and self.api_secret:
-            if params is None:
-                params = {}
+            # Use public data URL for public market data endpoints
+            if not signed and (endpoint.startswith("/api/v3/ticker") or 
+                            endpoint.startswith("/api/v3/depth") or
+                            endpoint.startswith("/api/v3/exchangeInfo") or
+                            endpoint == "api/v3/exchangeInfo"):
+                base = self.public_data_url
+            else:
+                base = self.base_url
                 
-            # Add timestamp parameter required by Binance
-            params['timestamp'] = str(int(time.time() * 1000))
-            
-            # Add recvWindow parameter for better reliability (optional)
-            params['recvWindow'] = '5000'
-            
-            # Create the query string without the signature
-            query_string = urlencode(params)
-            
-            # Create signature
-            signature = hmac.new(
-                self.api_secret.encode('utf-8'),
-                query_string.encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
-            
-            # Add the signature to the parameters
-            params['signature'] = signature
-            
-            # Set headers with API key
-            headers = {
-                'X-MBX-APIKEY': self.api_key
-            }
-            
-        # Handle request based on HTTP method
-        try:
-            self.logger.debug(f"Making {method.value} request to {url}")
-            
-            if method in [HttpMethod.GET, HttpMethod.DELETE]:
-                if params:
-                    response = requests.request(method.value, url, params=params, headers=headers)
-                else:
-                    response = requests.request(method.value, url, headers=headers)
-            else:  # POST, PUT
-                response = requests.request(method.value, url, data=params, headers=headers)
+            # Ensure endpoint starts with a slash
+            if not endpoint.startswith('/'):
+                endpoint = '/' + endpoint
                 
-            self._handle_error(response)
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Request failed: {str(e)}")
-            raise
+            url = f"{base}{endpoint}"
+            
+            # Add timestamp and signature for signed requests
+            if signed and self.api_key and self.api_secret:
+                if params is None:
+                    params = {}
+                    
+                # Add timestamp parameter required by Binance
+                params['timestamp'] = str(int(time.time() * 1000))
+                
+                # Add recvWindow parameter for better reliability (optional)
+                params['recvWindow'] = '5000'
+                
+                # Create the query string without the signature
+                query_string = urlencode(params)
+                
+                # Create signature
+                signature = hmac.new(
+                    self.api_secret.encode('utf-8'),
+                    query_string.encode('utf-8'),
+                    hashlib.sha256
+                ).hexdigest()
+                
+                # Add the signature to the parameters
+                params['signature'] = signature
+                
+                # Set headers with API key
+                headers = {
+                    'X-MBX-APIKEY': self.api_key
+                }
+                
+            try:
+                async with self.session.request(
+                    method.value, 
+                    url,
+                    params=params if method in [HttpMethod.GET, HttpMethod.DELETE] else None,
+                    json=params if method not in [HttpMethod.GET, HttpMethod.DELETE] else None,
+                    headers=headers
+                ) as response:
+                    await self._handle_error(response)
+                    return await response.json()
+            except aiohttp.ClientError as e:
+                self.logger.error(f"Request failed: {str(e)}")
+                raise
 
 
 

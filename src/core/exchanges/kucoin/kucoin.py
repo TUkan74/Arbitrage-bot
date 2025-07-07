@@ -3,12 +3,13 @@ from ..abstract.base_exchange import BaseExchange
 from ...enums import HttpMethod
 import hmac
 import hashlib
-import requests
+import aiohttp
 from urllib.parse import urlencode
 import base64
 import time
 import logging
 import json
+import asyncio
 
 from ..abstract import BaseExchange
 from ...enums import HttpMethod
@@ -52,7 +53,7 @@ class KucoinExchange(BaseExchange):
             ).digest()
         ).decode()
         
-    def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
+    async def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
         """
         Create signature for KuCoin API requests.
         
@@ -81,7 +82,7 @@ class KucoinExchange(BaseExchange):
         
         return base64.b64encode(signature).decode()
         
-    def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
+    async def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
         timestamp = str(int(time.time() * 1000))
         
         # Create query string for GET/DELETE requests
@@ -90,7 +91,7 @@ class KucoinExchange(BaseExchange):
             query_string = urlencode(params)
             
         # Create signature
-        signature = self._create_signature(method, endpoint, query_string, timestamp)
+        signature = await self._create_signature(method, endpoint, query_string, timestamp)
         
         return {
             "KC-API-KEY": self.api_key,
@@ -104,7 +105,7 @@ class KucoinExchange(BaseExchange):
     def _format_symbol(self, symbol: str) -> str:
         return symbol.replace('/', '-')
         
-    def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
+    async def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:
         """
         Make a request to the KuCoin API.
@@ -119,81 +120,83 @@ class KucoinExchange(BaseExchange):
         Returns:
             Dict containing the API response
         """
-        self._handle_rate_limit()
-        
-        # Prepare URL
-        url = f"{self.base_url}{endpoint}"
-        
-        # Prepare headers
-        if signed and self.api_key and self.api_secret:
-            headers = self._get_signed_headers(method, endpoint, params)
+        if not self.session:
+            raise RuntimeError("Session not initialized. Use 'async with' or call initialize()")
             
-        # Handle GET/DELETE requests
-        if method in [HttpMethod.GET, HttpMethod.DELETE]:
-            if params:
-                url = f"{url}?{urlencode(params)}"
-            response = requests.request(method.value, url, headers=headers)
+        async with self.request_semaphore:  # Rate limiting
+            await self._handle_rate_limit()
             
-        # Handle POST requests
-        else:
-            data = json.dumps(params) if params else None
-            response = requests.request(method.value, url, headers=headers, data=data)
+            # Prepare URL
+            url = f"{self.base_url}{endpoint}"
             
-        self._handle_error(response)
-        return response.json()
+            # Prepare headers
+            if signed and self.api_key and self.api_secret:
+                headers = await self._get_signed_headers(method, endpoint, params)
+                
+            try:
+                async with self.session.request(
+                    method.value, 
+                    url,
+                    params=params if method in [HttpMethod.GET, HttpMethod.DELETE] else None,
+                    json=params if method not in [HttpMethod.GET, HttpMethod.DELETE] else None,
+                    headers=headers
+                ) as response:
+                    await self._handle_error(response)
+                    return await response.json()
+            except aiohttp.ClientError as e:
+                self.logger.error(f"Request failed: {str(e)}")
+                raise
         
-    def get_exchange_info(self) -> Dict[str, Any]:
+    async def get_exchange_info(self) -> Dict[str, Any]:
         
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v1/symbols"
         )
         return self.normalizer.normalize_exchange_info(response)
 
-    def get_ticker(self,symbol : str) -> Dict[str,Any]:
+    async def get_ticker(self,symbol : str) -> Dict[str,Any]:
 
         kucoin_symbol = self._format_symbol(symbol)
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v1/market/orderbook/level1",
             params={"symbol": kucoin_symbol}
         )
         return self.normalizer.normalize_ticker(symbol, response)
         
-        
-
-    def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
+    async def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
         kucoin_symbol = self._format_symbol(symbol)
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint=f"/api/v1/market/orderbook/level2_{limit}",
             params={"symbol": kucoin_symbol}
         )
         return self.normalizer.normalize_order_book(symbol, response)
         
-    def get_balance(self, account_id: Optional[str] = None,currency: Optional[str] = None) -> Dict[str, float]:
+    async def get_balance(self, account_id: Optional[str] = None,currency: Optional[str] = None) -> Dict[str, float]:
         if account_id:
-            response = self._make_request(
+            response = await self._make_request(
                 method=HttpMethod.GET,
                 endpoint=f"/api/v1/accounts/{account_id}",
                 params={"currency": currency if currency else None}
                 )
         else:
-            response = self._make_request(
+            response = await self._make_request(
                 method=HttpMethod.GET,
                 endpoint="/api/v1/accounts",
                 params={"currency": currency if currency else None}
                 )
         return self.normalizer.normalize_balance(response)
 
-    def get_account_id(self) -> str:
-        response = self._make_request(
+    async def get_account_id(self) -> str:
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v1/accounts"
             )
         return self.normalizer.normalize_account_id(response)
     
-    def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
+    async def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         """
         Get trading fees for a symbol or multiple symbols
         
@@ -214,7 +217,7 @@ class KucoinExchange(BaseExchange):
             kucoin_symbol = self._format_symbol(symbol)
             params = {"symbols": kucoin_symbol}
             
-            response = self._make_request(
+            response = await self._make_request(
                 method=HttpMethod.GET,
                 endpoint="/api/v1/trade-fees",
                 params=params,
@@ -233,7 +236,7 @@ class KucoinExchange(BaseExchange):
         
         else:
             # Get all trading fees
-            exchange_info = self.get_exchange_info()
+            exchange_info = await self.get_exchange_info()
             all_symbols = []
             
             for symbol_info in exchange_info.get("symbols", []):
@@ -252,7 +255,7 @@ class KucoinExchange(BaseExchange):
                 params = {"symbols": ",".join(batch)}
                 
                 try:
-                    response = self._make_request(
+                    response = await self._make_request(
                         method=HttpMethod.GET,
                         endpoint="/api/v1/trade-fees",
                         params=params,
@@ -266,20 +269,20 @@ class KucoinExchange(BaseExchange):
                             "taker": float(fee_info["takerFeeRate"])
                         }
                     
-                    self._handle_rate_limit()
+                    await self._handle_rate_limit()
                     # Add a small delay between batches to avoid rate limiting
-                    time.sleep(0.5)
+                    await asyncio.sleep(0.5)
                     
                 except Exception as e:
                     self.logger.error(f"Error fetching fees for batch: {e}")
             
             return result
 
-    def transfer(self, currency: str, amount: float, from_account: str, to_account: str) -> Dict[str, Any]:
+    async def transfer(self, currency: str, amount: float, from_account: str, to_account: str) -> Dict[str, Any]:
         #TODO Implement Not right now, to be implemented in phase 3
         pass
 
-    def place_order(self, symbol: str, order_type: str, side: str, amount: float, price: Optional[float] = None) -> Dict[str, Any]:
+    async def place_order(self, symbol: str, order_type: str, side: str, amount: float, price: Optional[float] = None) -> Dict[str, Any]:
         kucoin_symbol = self._format_symbol(symbol)
         
         # Base parameters for all order types
@@ -307,7 +310,7 @@ class KucoinExchange(BaseExchange):
             # Here we use size by default, but you could add a parameter to choose
             params["size"] = str(amount)
             
-        response = self._make_request(
+        response = await self._make_request(
             method=HttpMethod.POST,
             endpoint="/api/v1/hf/orders",
             params=params,
@@ -316,23 +319,23 @@ class KucoinExchange(BaseExchange):
         
         return self.normalizer.normalize_order(symbol, response)
 
-    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-        response = self._make_request(
+    async def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+        response = await self._make_request(
             method=HttpMethod.DELETE,
             endpoint=f"/api/v1/hf/orders/{order_id}",
             signed=True
         )
         return self.normalizer.normalize_order(symbol, response)
         
-    def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-        response = self._make_request(
+    async def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint=f"/api/v1/hf/orders/{order_id}",
             signed=True
         )
         return self.normalizer.normalize_order(symbol, response)
 
-    def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
+    async def withdraw(self, currency: str, amount: float, address: str, **params) -> Dict[str, Any]:
         self.logger.warning("Method withdraw() not implemented in Phase 2")
         return {"success": False, "message": "Method not implemented in Phase 2"}
 
