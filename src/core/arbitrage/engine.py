@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from core.exchanges.abstract import ExchangeInterface
 from utils.logger import Logger
+from api.client import CMCClient
 
 class ArbitrageEngine:
     """Arbitrage engine that identifies profitable trading opportunities across exchanges."""
@@ -22,6 +23,8 @@ class ArbitrageEngine:
         min_profit_percentage: float = 0.5,
         max_slippage: float = 0.5,
         target_symbols: Optional[List[str]] = None,
+        start_rank: int = 100,
+        end_rank: int = 1500,
         **kwargs
     ):
         """
@@ -32,13 +35,17 @@ class ArbitrageEngine:
             initial_capital: Starting capital for calculations
             min_profit_percentage: Minimum profit threshold (%)
             max_slippage: Maximum acceptable slippage (%)
-            target_symbols: List of trading pairs to monitor
+            target_symbols: Optional list of specific symbols to monitor
+            start_rank: Starting rank for coin selection (default 100)
+            end_rank: Ending rank for coin selection (default 1500)
         """
         self.exchanges = exchanges
         self.initial_capital = initial_capital
         self.min_profit_percentage = min_profit_percentage
         self.max_slippage = max_slippage
         self.target_symbols = target_symbols or []
+        self.start_rank = start_rank
+        self.end_rank = end_rank
         
         # Setup logger
         self.logger = Logger("arbitrage")
@@ -126,97 +133,30 @@ class ArbitrageEngine:
             raise
     
     async def _discover_tradable_symbols(self):
-        """Discover tradable symbols common across all exchanges with filtering."""
-        self.logger.info(f"Discovering tradable symbols across {len(self.exchanges)} exchanges")
-        all_symbols = {}
-        exchange_counts = {}
-        
-        # Fetch symbols from each exchange
-        for exchange_name, exchange in self.exchanges.items():
-            try:
-                self.logger.info(f"Fetching available symbols from {exchange_name}")
-                # Get exchange info with all available symbols
-                exchange_info = await self._async_call(exchange.get_exchange_info)
-                
-                # Ensure we're getting a dictionary, not a string
-                if not isinstance(exchange_info, dict):
-                    self.logger.error(f"Invalid exchange_info format from {exchange_name}: {type(exchange_info)}")
-                    continue
-                    
-                symbols = [s['symbol'] for s in exchange_info.get('symbols', []) 
-                          if s.get('status') == 'TRADING']
-                
-                # Filter out problematic symbols and keep only major pairs
-                filtered_symbols = []
-                for symbol in symbols:
-                    # Get base and quote currencies
-                    if '/' in symbol:
-                        base, quote = symbol.split('/')
-                        
-                        # Only accept major quote currencies and common base currencies
-                        if (quote in ['USDT', 'BTC', 'ETH'] and 
-                            not any(x in symbol for x in ['3L', '3S', 'UP', 'DOWN', 'BULL', 'BEAR'])):
-                            filtered_symbols.append(symbol)
-                            
-                            # Track symbol counts across exchanges
-                            if symbol not in exchange_counts:
-                                exchange_counts[symbol] = 0
-                            exchange_counts[symbol] += 1
-                
-                all_symbols[exchange_name] = set(filtered_symbols)
-                self.logger.info(f"Found {len(filtered_symbols)} filtered symbols for {exchange_name}")
-                
-            except Exception as e:
-                self.logger.error(f"Failed to get symbols for {exchange_name}: {str(e)}")
-        
-        # Find symbols available on all exchanges
-        if all_symbols:
-            if len(all_symbols) > 1:
-                common_symbols = set.intersection(*all_symbols.values())
-                self.logger.info(f"Found {len(common_symbols)} symbols common to ALL exchanges")
-                
-                # Also find symbols available on at least 2 exchanges
-                symbols_on_multiple = [s for s, count in exchange_counts.items() if count >= 2]
-                self.logger.info(f"Found {len(symbols_on_multiple)} symbols available on at least 2 exchanges")
-            else:
-                # If we only have one exchange, use its symbols
-                common_symbols = next(iter(all_symbols.values()))
-                self.logger.info(f"Only one exchange available, using its {len(common_symbols)} symbols")
-                
-            # Further limit to most common trading pairs for testing
-            major_pairs = [
-                "BTC/USDT", "ETH/USDT", "XRP/USDT", "LTC/USDT", "BNB/USDT", 
-                "ADA/USDT", "DOT/USDT", "SOL/USDT", "DOGE/USDT", "MATIC/USDT"
-            ]
-            limited_symbols = [s for s in common_symbols if s in major_pairs]
-            self.logger.debug(f"Major trading pairs available: {limited_symbols}")
+        """Discover tradable symbols using CoinMarketCap rankings."""
+        if self.target_symbols:
+            self.logger.info(f"Using provided target symbols: {len(self.target_symbols)} pairs")
+            return
             
-            # Use limited symbols if available, otherwise top 20 from common symbols
-            if limited_symbols:
-                self.target_symbols = limited_symbols
-                self.logger.info(f"Using {len(limited_symbols)} major trading pairs")
-            elif len(common_symbols) > 0:
-                # If we don't have major pairs but have common symbols, use those
-                common_list = list(common_symbols)
-                self.target_symbols = common_list[:20]  # Limit to 20 pairs for testing
-                self.logger.info(f"Using top {len(self.target_symbols)} common symbols")
-                if self.target_symbols:
-                    self.logger.debug(f"Selected symbols: {', '.join(self.target_symbols[:5])}...")
-            elif len(symbols_on_multiple) > 0:
-                # If we don't have common symbols across all exchanges, use ones on multiple exchanges
-                self.target_symbols = symbols_on_multiple[:20]
-                self.logger.info(f"Using {len(self.target_symbols)} symbols available on multiple exchanges")
+        try:
+            self.logger.info(f"Fetching ranked coins from CoinMarketCap (rank {self.start_rank}-{self.end_rank})")
+            cmc = CMCClient()
+            coins = cmc.get_ranked_coins(self.start_rank, self.end_rank)
+            
+            # Convert to USDT pairs
+            self.target_symbols = [f"{coin}/USDT" for coin in coins]
+            self.logger.info(f"Generated {len(self.target_symbols)} USDT trading pairs")
+            
+            if self.target_symbols:
+                self.logger.debug(f"First 5 pairs: {', '.join(self.target_symbols[:5])}...")
             else:
-                # Fallback to some known common symbols
+                self.logger.warning("No symbols generated, using fallback symbols")
                 self.target_symbols = ["BTC/USDT", "ETH/USDT"]
-                self.logger.warning(f"No common symbols found, using fallback symbols: {self.target_symbols}")
-        else:
-            self.logger.warning("No symbols discovered from exchanges")
-            # Fallback to some known common symbols
+                
+        except Exception as e:
+            self.logger.error(f"Error discovering symbols: {str(e)}")
             self.target_symbols = ["BTC/USDT", "ETH/USDT"]
             self.logger.info(f"Using fallback symbols: {self.target_symbols}")
-            
-        self.logger.info(f"Discovered {len(self.target_symbols)} trading symbols to monitor")
     
     async def _update_market_data(self):
         """Update all market data (order books, fees) asynchronously with better error handling."""
@@ -486,14 +426,14 @@ class ArbitrageEngine:
                     sell_price = sell_book['bids'][0][0]
                     
                     # Log the price comparison
-                    self.logger.debug(f"Comparing {symbol}: {buy_exchange} ask={buy_price} vs {sell_exchange} bid={sell_price}")
+                    self.logger.info(f"Comparing {symbol}: {buy_exchange} ask={buy_price} vs {sell_exchange} bid={sell_price}")
                     
                     # Check if there's potential profit (before fees/slippage)
                     direction = None
                     if sell_price > buy_price:
                         direction = "normal"
                         price_difference_pct = ((sell_price - buy_price) / buy_price) * 100
-                        self.logger.debug(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
+                        self.logger.info(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
                         price_favorable_count += 1
                     else:
                         # Check reverse direction
@@ -506,7 +446,7 @@ class ArbitrageEngine:
                             buy_exchange, sell_exchange = sell_exchange, buy_exchange
                             buy_price, sell_price = buy_price_reverse, sell_price_reverse
                             price_difference_pct = ((sell_price - buy_price) / buy_price) * 100
-                            self.logger.debug(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
+                            self.logger.info(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
                             price_favorable_count += 1
                         else:
                             # No opportunity in either direction
@@ -518,7 +458,7 @@ class ArbitrageEngine:
                     )
                     
                     # Log the detailed calculation results
-                    self.logger.debug(
+                    self.logger.info(
                         f"Calculated profit for {symbol} ({buy_exchange}->{sell_exchange}): "
                         f"${profit:.2f} ({profit_percentage:.2f}%) - "
                         f"Buy slippage: {buy_slippage:.2%}, Sell slippage: {sell_slippage:.2%}"

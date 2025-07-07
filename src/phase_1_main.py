@@ -11,7 +11,7 @@ pd.set_option("display.precision", 4, "display.colheader_justify", "center")
 
 # from models.Coins_map import Coins_map
 from models.Coin import Coin
-from api.coingecko_client import CoinGeckoClient
+from api.client import CoinGeckoClient
 from utils import convert_to_local_tz
 
 # from test import test_runs

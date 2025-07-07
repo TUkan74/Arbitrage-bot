@@ -103,7 +103,9 @@ async def main():
             initial_capital=float(os.getenv("ARBITRAGE_INITIAL_CAPITAL", 1000.0)),
             min_profit_percentage=float(os.getenv("ARBITRAGE_MIN_PROFIT", 0.5)),
             max_slippage=float(os.getenv("ARBITRAGE_MAX_SLIPPAGE", 0.5)),
-            target_symbols=os.getenv("ARBITRAGE_TARGET_SYMBOLS", "ETH/USDT,BTC/USDT").split(",") if os.getenv("ARBITRAGE_TARGET_SYMBOLS") else None
+            target_symbols=os.getenv("ARBITRAGE_TARGET_SYMBOLS", "").split(",") if os.getenv("ARBITRAGE_TARGET_SYMBOLS") else None,
+            start_rank=int(os.getenv("ARBITRAGE_START_RANK", "100")),
+            end_rank=int(os.getenv("ARBITRAGE_END_RANK", "1500"))
         )
         
         # Hook for sending Telegram notifications on opportunities
