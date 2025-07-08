@@ -75,7 +75,13 @@ class BaseExchange(ExchangeInterface):
         # Initialize session if not already done
         if not self.session:
             self.session = aiohttp.ClientSession()
-    
+
+    async def close(self):
+        """Close the exchange connection and clean up resources."""
+        if self.session:
+            await self.session.close()
+            self.session = None
+
     @property
     @abstractmethod
     def base_url(self) -> str:

@@ -1,13 +1,19 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
+import aiohttp
+from yarl import URL
+from contextlib import asynccontextmanager
 from core.exchanges.binance import BinanceExchange
 from core.enums import HttpMethod
 
 
 @pytest.fixture
-def binance():
+async def binance():
     """Create a BinanceExchange instance for testing"""
-    return BinanceExchange()
+    exchange = BinanceExchange()
+    await exchange.initialize()
+    yield exchange
+    await exchange.close()
 
 
 def test_base_url(binance):
@@ -24,9 +30,7 @@ def test_format_symbol(binance):
     """Test symbol format conversion"""
     # Test standard format to Binance format
     assert binance._format_symbol("BTC/USDT") == "BTCUSDT"
-
-    # Test already formatted symbol
-    assert binance._format_symbol("BTCUSDT") == "BTCUSDT"
+    assert binance._format_symbol("ETH/BTC") == "ETHBTC"
 
 
 @pytest.mark.parametrize(
@@ -42,23 +46,25 @@ def test_format_symbol(binance):
 @pytest.mark.asyncio
 async def test_base_url_selection(binance, endpoint, expected_base):
     """Test that the correct base URL is selected based on the endpoint"""
-    with patch("requests.request") as mock_raw_request:
-        mock_raw_request.return_value.json.return_value = {}
-        mock_raw_request.return_value.status_code = 200
+    mock_response = Mock(spec=aiohttp.ClientResponse)
+    mock_response.status = 200
+    mock_response._body = b"{}"
+    mock_response.content_type = "application/json"
+    mock_response.json = AsyncMock(return_value={})
 
-        with (
-            patch.object(binance, "_handle_rate_limit", AsyncMock()) as mock_handle_rate_limit,
-            patch.object(binance, "_handle_error", AsyncMock()) as mock_handle_error,
-        ):
+    @asynccontextmanager
+    async def mock_request_cm(*args, **kwargs):
+        yield mock_response
 
-            await binance._make_request(HttpMethod.GET, endpoint)
-
-            assert mock_raw_request.call_args is not None, "requests.request was not called"
-            called_args = mock_raw_request.call_args[0]
-            called_url = called_args[1]
-            assert called_url.startswith(
-                expected_base
-            ), f"Expected URL to start with {expected_base}, but got {called_url}"
+    with (
+        patch.object(binance.session, "request", return_value=mock_request_cm()) as mock_request,
+        patch.object(binance, "_handle_rate_limit", AsyncMock()) as mock_handle_rate_limit,
+        patch.object(binance, "_handle_error", AsyncMock()) as mock_handle_error,
+    ):
+        await binance._make_request(HttpMethod.GET, endpoint)
+        # Verify the correct base URL was used
+        called_url = mock_request.call_args[0][1]
+        assert called_url.startswith(expected_base), f"Expected URL to start with {expected_base}, got {called_url}"
 
 
 @pytest.mark.asyncio

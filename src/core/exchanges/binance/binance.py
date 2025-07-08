@@ -89,31 +89,25 @@ class BinanceExchange(BaseExchange):
         
 
     async def get_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
-       
         binance_symbol = self._format_symbol(symbol)
-        response = await self._make_request(
         response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/depth",
-            params={"symbol": binance_symbol, "limit": limit},
+            params={"symbol": binance_symbol, "limit": limit}
         )
         # self.logger.debug(f"Raw Binance order book response: {response}")
-
         return self.normalizer.normalize_order_book(symbol, response)
 
     async def get_balance(self) -> Dict[str, float]:
-        
         response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/account",
             signed=True
         )
         self.logger.debug(f"Balance response: {response}")
-
         return self.normalizer.normalize_balance(response)
     
     async def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
-        
         params = {}
         if symbol:
             binance_symbol = self._format_symbol(symbol)
@@ -126,7 +120,6 @@ class BinanceExchange(BaseExchange):
             signed=True
         )
         self.logger.debug(f"Trading fees response: {response}")
-
         return self.normalizer.normalize_trading_fees(response)
 
     # Required by interface but not implemented in Phase 2
@@ -143,9 +136,13 @@ class BinanceExchange(BaseExchange):
     
     async def place_order(self, symbol: str, order_type: str, side: str, 
                    amount: float, price: Optional[float] = None) -> Dict[str, Any]:
-        
         binance_symbol = self._format_symbol(symbol)
-        params = {"symbol": binance_symbol, "type": order_type, "side": side, "quantity": amount}
+        params = {
+            "symbol": binance_symbol,
+            "type": order_type,
+            "side": side,
+            "quantity": amount
+        }
 
         if price and order_type == "LIMIT":
             params["price"] = price
@@ -158,35 +155,28 @@ class BinanceExchange(BaseExchange):
             signed=True
         )
         self.logger.debug(f"Order response: {response}")
-
         return self.normalizer.normalize_order(response)
     
     async def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-
         binance_symbol = self._format_symbol(symbol)
-        response = await self._make_request(
         response = await self._make_request(
             method=HttpMethod.DELETE,
             endpoint="/api/v3/order",
             params={"orderId": order_id, "symbol": binance_symbol},
-            signed=True,
+            signed=True
         )
         self.logger.debug(f"Cancel order response: {response}")
-
         return self.normalizer.normalize_order(response)
     
     async def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-
         binance_symbol = self._format_symbol(symbol)
-        response = await self._make_request(
         response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/order",
             params={"orderId": order_id, "symbol": binance_symbol},
-            signed=True,
+            signed=True
         )
         self.logger.debug(f"Get order response: {response}")
-
         return self.normalizer.normalize_order(symbol, response)
 
     async def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
