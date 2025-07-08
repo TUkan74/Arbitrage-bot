@@ -35,13 +35,13 @@ def send_telegram_message(bot_token, chat_id, message):
 
 async def main():
     """
-    Main entry point for Phase 2 of the arbitrage bot.
+    Main entry point for the arbitrage bot.
     Initializes exchange connectors, sets up the arbitrage engine,
     and starts scanning for opportunities.
     """
     # Setup logger
     logger = Logger("main")
-    logger.info("Starting Arbitrage Bot - Phase 2")
+    logger.info("Starting Arbitrage Bot")
     
     # Load environment variables
     load_dotenv()

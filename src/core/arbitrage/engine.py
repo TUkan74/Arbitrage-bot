@@ -9,7 +9,7 @@ from collections import defaultdict
 import os
 from dotenv import load_dotenv
 
-from core.exchanges.abstract import ExchangeInterface
+from ..exchanges.abstract import ExchangeInterface
 from utils.logger import Logger
 from api.client import CMCClient
 
