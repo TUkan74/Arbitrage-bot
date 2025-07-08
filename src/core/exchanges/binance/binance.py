@@ -11,14 +11,11 @@ from ..abstract import BaseExchange
 from ...enums import HttpMethod
 
 
-
 class BinanceExchange(BaseExchange):
-    def __init__(self,**kwargs):
-        super().__init__(
-            exchange_name="BINANCE"
-        )
+    def __init__(self, **kwargs):
+        super().__init__(exchange_name="BINANCE")
         self.normalizer = BinanceNormalizer()
-        
+
     @property
     def base_url(self) -> str:
         return "https://api1.binance.com"
@@ -31,13 +28,13 @@ class BinanceExchange(BaseExchange):
     async def _create_signature(self, method: HttpMethod, endpoint: str, query_string: str, timestamp: str) -> str:
         """
         Create signature for Binance API requests using either HMAC-SHA256 or Ed25519
-        
+
         Args:
             method: HTTP method
             endpoint: API endpoint
             query_string: Query parameters as string
             timestamp: Current timestamp
-            
+
         Returns:
             String containing the signature
         """
@@ -47,35 +44,29 @@ class BinanceExchange(BaseExchange):
             msg += f"&timestamp={timestamp}"
         else:
             msg = f"timestamp={timestamp}"
-            
+
         # Check if we're using Ed25519 key
-        if hasattr(self, 'private_key') and self.private_key:
+        if hasattr(self, "private_key") and self.private_key:
             # Sign with Ed25519
-            signature = base64.b64encode(
-                self.private_key.sign(msg.encode('ASCII'))
-            ).decode('utf-8')
+            signature = base64.b64encode(self.private_key.sign(msg.encode("ASCII"))).decode("utf-8")
         else:
             # Fallback to HMAC-SHA256
             signature = hmac.new(
-                self.api_secret.encode('utf-8'),
-                msg.encode('utf-8'),
-                hashlib.sha256
+                self.api_secret.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256
             ).hexdigest()
-        
+
         return signature
 
     async def _get_signed_headers(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None) -> Dict[str, str]:
         # Only include the API key in headers
-        headers = {
-            'X-MBX-APIKEY': self.api_key
-        }
-        
+        headers = {"X-MBX-APIKEY": self.api_key}
+
         return headers
-    
+
     def _format_symbol(self, symbol: str) -> str:
         # Handle both formats
-        if '/' in symbol:
-            return symbol.replace('/', '')
+        if "/" in symbol:
+            return symbol.replace("/", "")
         return symbol
 
     async def get_exchange_info(self) -> Dict[str, Any]:
@@ -101,13 +92,14 @@ class BinanceExchange(BaseExchange):
        
         binance_symbol = self._format_symbol(symbol)
         response = await self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/depth",
-            params={"symbol": binance_symbol, "limit": limit}
+            params={"symbol": binance_symbol, "limit": limit},
         )
         # self.logger.debug(f"Raw Binance order book response: {response}")
-        
-        return self.normalizer.normalize_order_book(symbol,response)
+
+        return self.normalizer.normalize_order_book(symbol, response)
 
     async def get_balance(self) -> Dict[str, float]:
         
@@ -117,7 +109,7 @@ class BinanceExchange(BaseExchange):
             signed=True
         )
         self.logger.debug(f"Balance response: {response}")
-        
+
         return self.normalizer.normalize_balance(response)
     
     async def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
@@ -134,9 +126,9 @@ class BinanceExchange(BaseExchange):
             signed=True
         )
         self.logger.debug(f"Trading fees response: {response}")
-        
+
         return self.normalizer.normalize_trading_fees(response)
-        
+
     # Required by interface but not implemented in Phase 2
     async def transfer(self, currency: str, amount: float, from_account: str, 
                 to_account: str) -> Dict[str, Any]:
@@ -153,13 +145,8 @@ class BinanceExchange(BaseExchange):
                    amount: float, price: Optional[float] = None) -> Dict[str, Any]:
         
         binance_symbol = self._format_symbol(symbol)
-        params = {
-            "symbol": binance_symbol, 
-            "type": order_type, 
-            "side": side, 
-            "quantity": amount
-        }
-        
+        params = {"symbol": binance_symbol, "type": order_type, "side": side, "quantity": amount}
+
         if price and order_type == "LIMIT":
             params["price"] = price
             params["timeInForce"] = "GTC"  # Good Till Cancelled
@@ -171,34 +158,36 @@ class BinanceExchange(BaseExchange):
             signed=True
         )
         self.logger.debug(f"Order response: {response}")
-        
+
         return self.normalizer.normalize_order(response)
     
     async def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
 
         binance_symbol = self._format_symbol(symbol)
         response = await self._make_request(
+        response = await self._make_request(
             method=HttpMethod.DELETE,
             endpoint="/api/v3/order",
             params={"orderId": order_id, "symbol": binance_symbol},
-            signed=True
+            signed=True,
         )
         self.logger.debug(f"Cancel order response: {response}")
-        
+
         return self.normalizer.normalize_order(response)
     
     async def get_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
 
         binance_symbol = self._format_symbol(symbol)
         response = await self._make_request(
+        response = await self._make_request(
             method=HttpMethod.GET,
             endpoint="/api/v3/order",
             params={"orderId": order_id, "symbol": binance_symbol},
-            signed=True
+            signed=True,
         )
         self.logger.debug(f"Get order response: {response}")
-        
-        return self.normalizer.normalize_order(symbol,response)
+
+        return self.normalizer.normalize_order(symbol, response)
 
     async def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:
