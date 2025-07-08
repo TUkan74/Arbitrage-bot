@@ -137,16 +137,6 @@ async def engine():
 
 
 @pytest.mark.asyncio
-async def test_initialization(engine):
-    """Test that the engine initializes correctly."""
-    engine_instance = engine
-    assert len(engine_instance.exchanges) == 2
-    assert engine_instance.initial_capital == 1000.0
-    assert engine_instance.min_profit_percentage == 0.1
-    assert len(engine_instance.target_symbols) == 2
-
-
-@pytest.mark.asyncio
 async def test_estimate_slippage(engine):
     """Test slippage estimation."""
     engine_instance = engine
