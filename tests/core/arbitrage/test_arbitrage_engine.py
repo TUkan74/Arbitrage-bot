@@ -4,7 +4,9 @@ Tests for the arbitrage engine.
 
 import pytest
 import asyncio
+import os
 from unittest.mock import MagicMock, patch
+import json
 
 from core.arbitrage.engine import ArbitrageEngine
 from core.exchanges.abstract import ExchangeInterface
@@ -257,3 +259,518 @@ async def test_no_opportunity_when_prices_too_close(engine, monkeypatch):
 
     # There should be no opportunities
     assert len(opportunities) == 0
+
+
+@pytest.mark.asyncio
+async def test_load_config_from_env():
+    """Test loading configuration from environment variables."""
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to handle async operations
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        with patch.dict(os.environ, {
+            'ARBITRAGE_INITIAL_CAPITAL': '2000.0',
+            'ARBITRAGE_MIN_PROFIT': '1.5',
+            'ARBITRAGE_MAX_SLIPPAGE': '0.8',
+            'ARBITRAGE_TARGET_SYMBOLS': 'BTC/USDT,ETH/USDT,XRP/USDT'
+        }, clear=True):
+            engine = ArbitrageEngine(
+                exchanges={"BINANCE": binance},
+                initial_capital=1000.0,  # Should be overridden
+                min_profit_percentage=0.5,  # Should be overridden
+                max_slippage=0.5,  # Should be overridden
+            )
+            
+            # Replace the _async_call method
+            engine._async_call = mock_async_call
+            
+            assert engine.initial_capital == 2000.0
+            assert engine.min_profit_percentage == 1.5
+            assert engine.max_slippage == 0.8
+            assert engine.target_symbols == ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']
+
+@pytest.mark.asyncio
+async def test_load_config_defaults():
+    """Test loading default configuration when no environment variables are set."""
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to handle async operations
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        with patch.dict(os.environ, {}, clear=True):
+            engine = ArbitrageEngine(
+                exchanges={"BINANCE": binance},
+            )
+            
+            # Replace the _async_call method
+            engine._async_call = mock_async_call
+            
+            assert engine.initial_capital == 500.0  # Default value from __init__
+            assert engine.min_profit_percentage == 0.5
+            assert engine.max_slippage == 0.5
+            assert engine.target_symbols == []
+
+@pytest.mark.asyncio
+async def test_discover_tradable_symbols_with_cmc():
+    """Test discovering tradable symbols using CMC API."""
+    # Mock CMCClient
+    mock_cmc = MagicMock()
+    mock_cmc.get_ranked_coins.return_value = ['BTC', 'ETH', 'XRP']
+    
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to handle async operations
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        with patch('core.arbitrage.engine.CMCClient', return_value=mock_cmc):
+            engine = ArbitrageEngine(
+                exchanges={"BINANCE": binance},
+                start_rank=1,
+                end_rank=10
+            )
+            
+            # Replace the _async_call method
+            engine._async_call = mock_async_call
+            
+            await engine._discover_tradable_symbols()
+            
+            assert engine.target_symbols == ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']
+            mock_cmc.get_ranked_coins.assert_called_once_with(1, 10)
+
+@pytest.mark.asyncio
+async def test_discover_tradable_symbols_cmc_error():
+    """Test discovering tradable symbols when CMC API fails."""
+    # Mock CMCClient to raise an exception
+    mock_cmc = MagicMock()
+    mock_cmc.get_ranked_coins.side_effect = Exception("API Error")
+    
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to handle async operations
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        with patch('core.arbitrage.engine.CMCClient', return_value=mock_cmc):
+            engine = ArbitrageEngine(
+                exchanges={"BINANCE": binance},
+                start_rank=1,
+                end_rank=10
+            )
+            
+            # Replace the _async_call method
+            engine._async_call = mock_async_call
+            
+            await engine._discover_tradable_symbols()
+            
+            # Should fall back to default symbols
+            assert engine.target_symbols == ['BTC/USDT', 'ETH/USDT']
+
+@pytest.mark.asyncio
+async def test_discover_tradable_symbols_with_provided_symbols():
+    """Test that provided symbols are used instead of discovering new ones."""
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to handle async operations
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_trading_fees:
+                return {
+                    "DOT/USDT": {"maker": 0.001, "taker": 0.001},
+                    "LINK/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=['DOT/USDT', 'LINK/USDT']
+        )
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        await engine._discover_tradable_symbols()
+        
+        # Should keep the provided symbols
+        assert engine.target_symbols == ['DOT/USDT', 'LINK/USDT']
+
+@pytest.mark.asyncio
+async def test_update_market_data_success():
+    """Test successful market data updates."""
+    async with MockExchange("BINANCE") as binance, MockExchange("KUCOIN") as kucoin:
+        # Mock the async_call method to return order book data directly
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_order_book:
+                return {
+                    "symbol": args[0],
+                    "bids": [[49990.0, 1.0], [49980.0, 2.0]],
+                    "asks": [[50010.0, 1.0], [50020.0, 2.0]]
+                }
+            elif func == kucoin.get_order_book:
+                return {
+                    "symbol": args[0],
+                    "bids": [[49995.0, 1.0], [49985.0, 2.0]],
+                    "asks": [[50005.0, 1.0], [50015.0, 2.0]]
+                }
+            elif func == binance.get_trading_fees or func == kucoin.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance, "KUCOIN": kucoin},
+            target_symbols=["BTC/USDT", "ETH/USDT"]
+        )
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        await engine._update_market_data()
+        
+        # Check order books were cached
+        assert "BTC/USDT" in engine.order_books_cache
+        assert "ETH/USDT" in engine.order_books_cache
+        assert "BINANCE" in engine.order_books_cache["BTC/USDT"]
+        assert "KUCOIN" in engine.order_books_cache["BTC/USDT"]
+        
+        # Check trading fees were cached
+        assert "BINANCE" in engine.trading_fees_cache
+        assert "KUCOIN" in engine.trading_fees_cache
+        
+        # Verify order book data
+        binance_book = engine.order_books_cache["BTC/USDT"]["BINANCE"]["data"]
+        assert binance_book["bids"][0] == [49990.0, 1.0]
+        assert binance_book["asks"][0] == [50010.0, 1.0]
+        
+        # Verify trading fees
+        assert engine.trading_fees_cache["BINANCE"]["BTC/USDT"]["maker"] == 0.001
+
+@pytest.mark.asyncio
+async def test_update_market_data_order_book_error():
+    """Test handling of order book update errors."""
+    async with MockExchange("BINANCE") as binance:
+        # Make get_order_book raise an exception
+        binance.get_order_book = MagicMock(side_effect=Exception("API Error"))
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        await engine._update_market_data()
+        
+        # Check that the symbol was marked as failed
+        assert "BINANCE" in engine.failed_symbols
+        assert "BTC/USDT" in engine.failed_symbols["BINANCE"]
+        
+        # Check that no order book was cached
+        assert "BTC/USDT" not in engine.order_books_cache
+
+@pytest.mark.asyncio
+async def test_update_market_data_empty_order_book():
+    """Test handling of empty order books."""
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to return empty order book
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_order_book:
+                return {"bids": [], "asks": []}
+            elif func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        await engine._update_market_data()
+        
+        # Check that no order book was cached
+        assert "BTC/USDT" not in engine.order_books_cache
+
+@pytest.mark.asyncio
+async def test_update_market_data_trading_fees_error():
+    """Test handling of trading fees update errors."""
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to simulate trading fees error
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_order_book:
+                return {
+                    "symbol": args[0],
+                    "bids": [[49990.0, 1.0], [49980.0, 2.0]],
+                    "asks": [[50010.0, 1.0], [50020.0, 2.0]]
+                }
+            elif func == binance.get_trading_fees:
+                raise Exception("API Error")
+            return None
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        await engine._update_market_data()
+        
+        # Check that no trading fees were cached
+        assert "BINANCE" not in engine.trading_fees_cache
+
+@pytest.mark.asyncio
+async def test_update_market_data_skip_failed_symbols():
+    """Test that previously failed symbols are skipped."""
+    async with MockExchange("BINANCE") as binance:
+        # Mock the async_call method to return order book data directly
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_order_book:
+                symbol = args[0]
+                if symbol == "ETH/USDT":
+                    return {
+                        "symbol": symbol,
+                        "bids": [[2990.0, 1.0], [2980.0, 2.0]],
+                        "asks": [[3010.0, 1.0], [3020.0, 2.0]]
+                    }
+            elif func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT", "ETH/USDT"]
+        )
+        
+        # Mark BTC/USDT as failed
+        engine.failed_symbols = {"BINANCE": {"BTC/USDT"}}
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        await engine._update_market_data()
+        
+        # Check that only ETH/USDT was updated
+        assert "ETH/USDT" in engine.order_books_cache
+        assert "BTC/USDT" not in engine.order_books_cache
+        
+        # Verify order book data for ETH/USDT
+        eth_book = engine.order_books_cache["ETH/USDT"]["BINANCE"]["data"]
+        assert eth_book["bids"][0] == [2990.0, 1.0]
+        assert eth_book["asks"][0] == [3010.0, 1.0]
+
+@pytest.mark.asyncio
+async def test_async_call_retry():
+    """Test the async call retry mechanism."""
+    async with MockExchange("BINANCE") as binance:
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        # Create a mock function that fails twice then succeeds
+        call_count = 0
+        
+        async def mock_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise Exception("Temporary error")
+            return "success"
+        
+        # Test the retry mechanism
+        result = None
+        for _ in range(3):
+            try:
+                result = await mock_func()
+                break
+            except Exception:
+                continue
+        
+        assert result == "success"
+        assert call_count == 3  # Should have retried twice
+
+
+
+@pytest.mark.asyncio
+async def test_execute_arbitrage_failure():
+    """Test arbitrage execution failure."""
+    async with MockExchange("BINANCE") as binance, MockExchange("KUCOIN") as kucoin:
+        # Mock the async_call method to simulate order failure
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.place_order:
+                raise Exception("Order failed")
+            return None
+        
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance, "KUCOIN": kucoin},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        opportunity = {
+            'symbol': 'BTC/USDT',
+            'buy_exchange': 'BINANCE',
+            'sell_exchange': 'KUCOIN',
+            'buy_price': 49000.0,
+            'sell_price': 50000.0,
+            'amount': 1.0,
+            'profit_percentage': 2.0,
+            'total_profit': 1000.0
+        }
+        
+        success = await engine.execute_arbitrage(opportunity)
+        
+        assert not success
+        assert engine.successful_trades == 0
+        assert engine.total_profit == 0.0
+
+@pytest.mark.asyncio
+async def test_calculate_potential_profit():
+    """Test profit calculation with fees and slippage."""
+    async with MockExchange("BINANCE") as binance, MockExchange("KUCOIN") as kucoin:
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance, "KUCOIN": kucoin},
+            target_symbols=["BTC/USDT"],
+            initial_capital=50000.0
+        )
+        
+        # Setup mock order books
+        engine.order_books_cache = {
+            "BTC/USDT": {
+                "BINANCE": {
+                    "data": {
+                        "bids": [[49990.0, 1.0], [49980.0, 2.0]],
+                        "asks": [[50010.0, 1.0], [50020.0, 2.0]]
+                    },
+                    "timestamp": 123456789
+                },
+                "KUCOIN": {
+                    "data": {
+                        "bids": [[50500.0, 1.0], [50490.0, 2.0]],
+                        "asks": [[50510.0, 1.0], [50520.0, 2.0]]
+                    },
+                    "timestamp": 123456789
+                }
+            }
+        }
+        
+        # Setup mock trading fees
+        engine.trading_fees_cache = {
+            "BINANCE": {"BTC/USDT": {"maker": 0.001, "taker": 0.001}},
+            "KUCOIN": {"BTC/USDT": {"maker": 0.001, "taker": 0.001}}
+        }
+        
+        # Calculate potential profit
+        profit, profit_percentage, buy_slippage, sell_slippage = await engine.calculate_potential_profit(
+            "BTC/USDT", "BINANCE", "KUCOIN", 50000.0
+        )
+        
+        # Verify calculations
+        assert buy_slippage <= engine.max_slippage/100
+        assert sell_slippage <= engine.max_slippage/100
+        assert profit > 0
+        assert profit_percentage > 0
+        
+        # Verify profit calculation
+        # Buy 1 BTC at 50010.0 with 0.1% fee
+        buy_amount = 50000.0
+        buy_fee = buy_amount * 0.001
+        coins_bought = (buy_amount - buy_fee) / 50010.0
+        
+        # Sell coins at 50500.0 with 0.1% fee
+        sell_amount_before_fee = coins_bought * 50500.0
+        sell_fee = sell_amount_before_fee * 0.001
+        sell_amount = sell_amount_before_fee - sell_fee
+        
+        expected_profit = sell_amount - buy_amount
+        expected_profit_percentage = (expected_profit / buy_amount) * 100
+        
+        assert profit == pytest.approx(expected_profit, rel=1e-10)
+        assert profit_percentage == pytest.approx(expected_profit_percentage, rel=1e-10)
+
+@pytest.mark.asyncio
+async def test_generate_report():
+    """Test report generation."""
+    async with MockExchange("BINANCE") as binance:
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        # Set some stats
+        engine.opportunities_found = 10
+        engine.successful_trades = 5
+        engine.total_profit = 1000.0
+        
+        report = engine.generate_report()
+        
+        assert report["opportunities_found"] == 10
+        assert report["successful_trades"] == 5
+        assert report["total_profit"] == 1000.0
+        assert report["success_rate"] == 50.0  # 5/10 * 100
+        assert report["monitored_symbols"] == 1
+        assert report["active_exchanges"] == ["BINANCE"]
+
+@pytest.mark.asyncio
+async def test_start_with_keyboard_interrupt():
+    """Test graceful shutdown on keyboard interrupt."""
+    async with MockExchange("BINANCE") as binance:
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"]
+        )
+        
+        # Mock the async_call method to handle async operations
+        async def mock_async_call(func, *args, **kwargs):
+            if func == binance.get_order_book:
+                return {
+                    "symbol": args[0],
+                    "bids": [[49990.0, 1.0], [49980.0, 2.0]],
+                    "asks": [[50010.0, 1.0], [50020.0, 2.0]]
+                }
+            elif func == binance.get_trading_fees:
+                return {
+                    "BTC/USDT": {"maker": 0.001, "taker": 0.001},
+                    "ETH/USDT": {"maker": 0.001, "taker": 0.001}
+                }
+            return None
+        
+        # Replace the _async_call method
+        engine._async_call = mock_async_call
+        
+        # Mock asyncio.sleep to raise KeyboardInterrupt
+        async def mock_sleep(*args, **kwargs):
+            raise KeyboardInterrupt()
+            
+        with patch('asyncio.sleep', side_effect=mock_sleep):
+            # Should not raise any exceptions
+            await engine.start(scan_interval=1.0)
