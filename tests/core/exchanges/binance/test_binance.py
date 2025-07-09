@@ -209,7 +209,11 @@ async def test_place_order(exchange):
     mock_response = {
         "orderId": "12345",
         "symbol": "BTCUSDT",
-        "status": "NEW"
+        "status": "NEW",
+        "price": "50000.0",
+        "origQty": "1.0",
+        "side": "BUY",
+        "type": "LIMIT"
     }
     
     with patch('aiohttp.ClientSession.request') as mock_request:
@@ -228,6 +232,9 @@ async def test_place_order(exchange):
         
         assert result['id'] == '12345'
         assert result['status'] == 'NEW'
+        assert result['symbol'] == 'BTC/USDT'
+        assert result['price'] == 50000.0
+        assert result['amount'] == 1.0
 
 @pytest.mark.asyncio
 async def test_cancel_order(exchange):
@@ -235,7 +242,11 @@ async def test_cancel_order(exchange):
     mock_response = {
         "orderId": "12345",
         "symbol": "BTCUSDT",
-        "status": "CANCELED"
+        "status": "CANCELED",
+        "price": "50000.0",
+        "origQty": "1.0",
+        "side": "BUY",
+        "type": "LIMIT"
     }
     
     with patch('aiohttp.ClientSession.request') as mock_request:
@@ -248,6 +259,7 @@ async def test_cancel_order(exchange):
         
         assert result['id'] == '12345'
         assert result['status'] == 'CANCELED'
+        assert result['symbol'] == 'BTC/USDT'
 
 @pytest.mark.asyncio
 async def test_get_order(exchange):

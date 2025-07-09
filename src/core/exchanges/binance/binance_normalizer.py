@@ -1,8 +1,13 @@
 from typing import Dict, Any, List, Optional
 from ..abstract.response_normalizer import ResponseNormalizer
+from utils.logger import Logger
 
 class BinanceNormalizer(ResponseNormalizer):
     """Normalizer for Binance API responses."""
+    
+    def __init__(self):
+        super().__init__()
+        self.logger = Logger("exchange")
     
     def normalize_exchange_info(self, raw_response: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -216,38 +221,40 @@ class BinanceNormalizer(ResponseNormalizer):
             
         return fees
         
-    def normalize_order(self, symbol: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize_order(self, raw_response: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normalize order data from Binance API response.
         
         Args:
-            symbol: Trading pair symbol
             raw_response: Raw API response from Binance
             
         Returns:
-            Normalized order data
+            Normalized order data or empty dict for error responses
         """
-        order_id = raw_response.get('orderId')
-        if not order_id:
-            # For error responses or incomplete data
-            return {
-                'id': None,
-                'symbol': symbol,
-                'status': 'FAILED',
-                'error': raw_response.get('msg', 'Unknown error')
-            }
+        if not raw_response or 'orderId' not in raw_response:
+            return {}
             
+        # Convert Binance symbol format to standard format
+        symbol = raw_response.get('symbol', '')
+        if symbol:
+            for quote in ['USDT', 'BUSD', 'USDC', 'BTC', 'ETH', 'BNB']:
+                if symbol.endswith(quote):
+                    base = symbol[:-len(quote)]
+                    symbol = f"{base}/{quote}"
+                    break
+        
         return {
-            'id': str(order_id),
+            'id': str(raw_response.get('orderId', '')),
             'symbol': symbol,
-            'price': float(raw_response.get('price', 0)),
-            'quantity': float(raw_response.get('origQty', 0)),
-            'executed_qty': float(raw_response.get('executedQty', 0)),
-            'side': raw_response.get('side', '').lower(),
-            'type': raw_response.get('type', '').lower(),
             'status': raw_response.get('status', 'UNKNOWN'),
-            'time': raw_response.get('time', 0),
-            'filled_percent': (float(raw_response.get('executedQty', 0)) / 
-                             float(raw_response.get('origQty', 1))) * 100
+            'type': raw_response.get('type', ''),
+            'side': raw_response.get('side', ''),
+            'price': float(raw_response.get('price', 0)),
+            'amount': float(raw_response.get('origQty', 0)),
+            'filled': float(raw_response.get('executedQty', 0)),
+            'remaining': float(raw_response.get('origQty', 0)) - float(raw_response.get('executedQty', 0)),
+            'fee': float(raw_response.get('commission', 0)),
+            'fee_currency': raw_response.get('commissionAsset', ''),
+            'created_at': raw_response.get('time', 0)
         }
 

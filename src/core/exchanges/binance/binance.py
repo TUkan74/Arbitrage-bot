@@ -177,7 +177,7 @@ class BinanceExchange(BaseExchange):
             signed=True
         )
         self.logger.debug(f"Get order response: {response}")
-        return self.normalizer.normalize_order(symbol, response)
+        return self.normalizer.normalize_order(response)
 
     async def _make_request(self, method: HttpMethod, endpoint: str, params: Optional[Dict] = None, 
                      headers: Optional[Dict] = None, signed: bool = False) -> Dict[str, Any]:

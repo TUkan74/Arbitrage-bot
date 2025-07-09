@@ -198,13 +198,13 @@ class KucoinExchange(BaseExchange):
     
     async def get_trading_fees(self, symbol: Optional[str] = None) -> Dict[str, float]:
         """
-        Get trading fees for a symbol or multiple symbols
+        Get trading fees for a symbol or all symbols.
         
         Args:
-            symbol: Trading pair symbol (e.g., "BTC/USDT") or None
+            symbol: Optional trading pair symbol
             
         Returns:
-            Dict containing fee rates for maker and taker for the requested symbol(s)
+            Dict containing trading fees
         """
         # Check if we have valid API credentials before attempting the call
         if not self.api_key or not self.api_secret or not self.api_passphrase:
@@ -213,70 +213,49 @@ class KucoinExchange(BaseExchange):
             default_fee = {"maker": 0.001, "taker": 0.001}
             return {symbol: default_fee} if symbol else {"BTC/USDT": default_fee, "ETH/USDT": default_fee}
             
-        if symbol:
-            kucoin_symbol = self._format_symbol(symbol)
-            params = {"symbols": kucoin_symbol}
-            
-            response = await self._make_request(
-                method=HttpMethod.GET,
-                endpoint="/api/v1/trade-fees",
-                params=params,
-                signed=True
-            )
-            
-            result = {}
-            for fee_info in response.get("data", []):
-                std_symbol = fee_info["symbol"].replace("-", "/")
-                result[std_symbol] = {
-                    "maker": float(fee_info["makerFeeRate"]),
-                    "taker": float(fee_info["takerFeeRate"])
-                }
+        try:
+            if symbol:
+                kucoin_symbol = self._format_symbol(symbol)
+                response = await self._make_request(
+                    method=HttpMethod.GET,
+                    endpoint="/api/v1/trade-fees",
+                    params={"symbols": kucoin_symbol},
+                    signed=True
+                )
+            else:
+                response = await self._make_request(
+                    method=HttpMethod.GET,
+                    endpoint="/api/v1/trade-fees",
+                    signed=True
+                )
                 
-            return result
-        
-        else:
-            # Get all trading fees
-            exchange_info = await self.get_exchange_info()
-            all_symbols = []
-            
-            for symbol_info in exchange_info.get("symbols", []):
-                if symbol_info.get("status") == "TRADING":  
-                    all_symbols.append(symbol_info["symbol"].replace("/", "-"))
-            
-            if not all_symbols:
-                return {}  
-            
-            result = {}
-            
-            # Process fewer symbols at a time to avoid API rate limits and errors
-            symbol_batches = [all_symbols[i:i+5] for i in range(0, len(all_symbols), 5)]
-            
-            for batch in symbol_batches:
-                params = {"symbols": ",".join(batch)}
+            if isinstance(response, str):
+                response = json.loads(response)
                 
-                try:
-                    response = await self._make_request(
-                        method=HttpMethod.GET,
-                        endpoint="/api/v1/trade-fees",
-                        params=params,
-                        signed=True
-                    )
+            if "data" in response:
+                data = response["data"]
+                # Handle single object response
+                if isinstance(data, dict):
+                    data = [data]
+                # Handle list response
+                if isinstance(data, list):
+                    result = {}
+                    for fee_info in data:
+                        if isinstance(fee_info, dict):
+                            symbol = fee_info.get("symbol", "").replace("-", "/")
+                            if symbol:
+                                result[symbol] = {
+                                    "maker": float(fee_info.get("makerFeeRate", 0.001)),
+                                    "taker": float(fee_info.get("takerFeeRate", 0.001))
+                                }
+                    return result
                     
-                    for fee_info in response.get("data", []):
-                        std_symbol = fee_info["symbol"].replace("-", "/")
-                        result[std_symbol] = {
-                            "maker": float(fee_info["makerFeeRate"]),
-                            "taker": float(fee_info["takerFeeRate"])
-                        }
-                    
-                    await self._handle_rate_limit()
-                    # Add a small delay between batches to avoid rate limiting
-                    await asyncio.sleep(0.5)
-                    
-                except Exception as e:
-                    self.logger.error(f"Error fetching fees for batch: {e}")
+            self.logger.error(f"Unexpected response format: {response}")
+            return {}
             
-            return result
+        except Exception as e:
+            self.logger.error(f"Error getting trading fees: {str(e)}")
+            return {}
 
     async def transfer(self, currency: str, amount: float, from_account: str, to_account: str) -> Dict[str, Any]:
         #TODO Implement Not right now, to be implemented in phase 3

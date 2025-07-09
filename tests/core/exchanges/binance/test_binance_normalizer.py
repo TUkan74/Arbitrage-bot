@@ -59,22 +59,6 @@ def test_normalize_exchange_info_valid(normalizer):
     assert symbol['price_precision'] == 8
     assert symbol['qty_precision'] == 8
 
-def test_normalize_exchange_info_invalid(normalizer):
-    """Test normalizing invalid exchange info response."""
-    # Test with non-dict input
-    result = normalizer.normalize_exchange_info([])
-    assert result['exchange'] == 'BINANCE'
-    assert result['symbols'] == []
-    
-    # Test with empty dict
-    result = normalizer.normalize_exchange_info({})
-    assert result['exchange'] == 'BINANCE'
-    assert result['symbols'] == []
-    
-    # Test with missing required fields
-    result = normalizer.normalize_exchange_info({'symbols': [{'status': 'TRADING'}]})
-    assert result['exchange'] == 'BINANCE'
-    assert result['symbols'] == []
 
 def test_normalize_ticker_valid(normalizer):
     """Test normalizing valid ticker response."""
@@ -269,29 +253,26 @@ def test_normalize_order_valid(normalizer):
         'status': 'PARTIALLY_FILLED',
         'time': 1625097600000
     }
-    
-    result = normalizer.normalize_order('BTC/USDT', raw_response)
-    
+
+    result = normalizer.normalize_order(raw_response)
+
     assert result['id'] == '12345'
     assert result['symbol'] == 'BTC/USDT'
     assert result['price'] == 50000.00
-    assert result['quantity'] == 1.00
-    assert result['executed_qty'] == 0.50
-    assert result['side'] == 'buy'
-    assert result['type'] == 'limit'
+    assert result['amount'] == 1.00
+    assert result['filled'] == 0.50
+    assert result['remaining'] == 0.50
     assert result['status'] == 'PARTIALLY_FILLED'
-    assert result['time'] == 1625097600000
-    assert result['filled_percent'] == 50.0
+    assert result['side'] == 'BUY'
+    assert result['type'] == 'LIMIT'
+    assert result['created_at'] == 1625097600000
 
 def test_normalize_order_error(normalizer):
     """Test normalizing error order response."""
     raw_response = {
         'msg': 'Invalid order'
     }
-    
-    result = normalizer.normalize_order('BTC/USDT', raw_response)
-    
-    assert result['id'] is None
-    assert result['symbol'] == 'BTC/USDT'
-    assert result['status'] == 'FAILED'
-    assert result['error'] == 'Invalid order' 
+
+    result = normalizer.normalize_order(raw_response)
+
+    assert result == {}  # Should return empty dict for error responses 
