@@ -20,6 +20,8 @@ class Logger:
             self.file_path = "logs/trades/trades.log"
         elif self.type == "main":
             self.file_path = "logs/main/main.log"
+        elif self.type == "cmc":
+            self.file_path = "logs/cmc/cmc.log"
         self.clear_log()
     
     # # # # # # # # # # 
