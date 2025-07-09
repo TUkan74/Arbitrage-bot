@@ -113,12 +113,3 @@ class Logger:
         self._log_message("DEBUG", message)
         
 
-# Example usage
-# To use with colors in log file: logger = Logger("exchange", use_colors_in_file=True)
-# To use without colors in log file (default): logger = Logger("exchange")
-# logger = Logger("exchange")
-# logger.error("Test error")
-# logger.warning("Test warning")
-# logger.info("Test info")
-# logger.debug("Test debug")
-# logger.clear_log()

@@ -55,7 +55,6 @@ class KucoinNormalizer(ResponseNormalizer):
             'high': float(data.get('high', 0)),
             'low': float(data.get('low', 0)),
             'timestamp': data.get('time', 0),
-    
         }
         
     def normalize_order_book(self, symbol: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,46 +66,77 @@ class KucoinNormalizer(ResponseNormalizer):
             'timestamp': data.get('time', 0)
         }
         
-    def normalize_balance(self, raw_response: Dict[str, Any]) -> Dict[str, float]:
-        data = []
-        for account in raw_response:
-            """
-            "id": "5bd6e9286d99522a52e458de", //accountId
-            "currency": "BTC", //Currency
-            "type": "main", //Account type, including main and trade
-            "balance": "237582.04299", //Total assets of a currency
-            "available": "237582.032", //Available assets of a currency
-            "holds": "0.01099" //Hold assets of a currency
-            """
-            data.append({
-                "id": account['id'],
-                "type": account['type'],
-                "currency": account['currency'],
-                "balance": float(account['balance']),
-                "available": float(account['available']),
-                "holds": float(account['holds'])
-            })
-        return data
+    def normalize_balance(self, raw_response: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+        """
+        Normalize balance response from KuCoin API.
+        
+        Args:
+            raw_response: Raw API response
+            
+        Returns:
+            Dict with currency as key and balance details as value
+        """
+        result = {}
+        data = raw_response.get('data', [])
+        
+        # Handle both list and single account responses
+        if isinstance(data, dict):
+            data = [data]
+            
+        for account in data:
+            currency = account['currency']
+            result[currency] = {
+                'free': float(account['available']),
+                'locked': float(account['holds']),
+                'total': float(account['balance'])
+            }
+        
+        return result
         
     def normalize_trading_fees(self, raw_response: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
-        data = []
-        for symbol in raw_response:
-            data.append({
-                "symbol": symbol['symbol'],
-                "maker_fee": float(symbol['makerFeeRate']),
-                "taker_fee": float(symbol['takerFeeRate'])
-            })
-        return data     
+        """
+        Normalize trading fees response from KuCoin API.
+
+        Args:
+            raw_response: Raw API response containing trading fees data
+
+        Returns:
+            Dict containing normalized trading fees data
+        """
+        result = {}
+        data = raw_response.get('data', {})
+        
+        # Handle single symbol response
+        if isinstance(data, dict):
+            symbol = data.get('symbol', '').replace('-', '/')
+            if symbol:
+                result[symbol] = {
+                    'maker': float(data.get('makerFeeRate', 0.001)),
+                    'taker': float(data.get('takerFeeRate', 0.001))
+                }
+        # Handle multiple symbols response
+        elif isinstance(data, list):
+            for fee_info in data:
+                symbol = fee_info.get('symbol', '').replace('-', '/')
+                if symbol:
+                    result[symbol] = {
+                        'maker': float(fee_info.get('makerFeeRate', 0.001)),
+                        'taker': float(fee_info.get('takerFeeRate', 0.001))
+                    }
+        
+        return result
         
     def normalize_order(self, symbol: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normalize order responses from different KuCoin API endpoints.
         Handles responses from place_order, cancel_order, and get_order operations.
         
-        The response format varies between these operations:
-        - place_order: {"data": {"orderId": "..."}}
-        - cancel_order: {"data": {"cancelledOrderIds": ["..."]}}
-        - get_order: {"data": {"id": "...", "symbol": "...", ... }}
+        Args:
+            symbol: Trading pair symbol
+            raw_response: Raw API response
+            
+        Returns:
+            Normalized order information
         """
         data = raw_response.get('data', {})
         
@@ -127,33 +157,47 @@ class KucoinNormalizer(ResponseNormalizer):
             }
         
         # Handle get_order response (most detailed)
-        return {
+        order = {
             "id": data.get('id'),
-            "clientOid": data.get('clientOid', None),
             "symbol": data.get('symbol', symbol.replace('/', '-')),
-            "opType": data.get('opType', None),
             "type": data.get('type', None),
             "side": data.get('side', None),
             "price": float(data.get('price', 0)),
-            "size": float(data.get('size', 0)),
-            "funds": float(data.get('funds', 0)),
-            "dealSize": float(data.get('dealSize', 0)),
-            "dealFunds": float(data.get('dealFunds', 0)),
-            "remainSize": float(data.get('remainSize', 0)),
-            "remainFunds": float(data.get('remainFunds', 0)),
-            "cancelledSize": float(data.get('cancelledSize', 0)),
-            "cancelledFunds": float(data.get('cancelledFunds', 0)),
-            "fee": float(data.get('fee', 0)),
-            "feeCurrency": data.get('feeCurrency', None),
-            "stp": data.get('stp', None),
-            "timeInForce": data.get('timeInForce', None),
-            "postOnly": data.get('postOnly', False),
-            "hidden": data.get('hidden', False),
-            "iceberg": data.get('iceberg', False),
-            "visibleSize": data.get('visibleSize', 0),
-            "cancelAfter": data.get('cancelAfter', 0),
+            "amount": float(data.get('size', 0)),
+            "filled": float(data.get('dealSize', 0)),
+            "remaining": float(data.get('remainSize', 0)),
             "status": data.get('status', None),
+            "fee": float(data.get('fee', 0)),
+            "fee_currency": data.get('feeCurrency', None),
+            "created_at": data.get('createdAt', None)
         }
+        
+        # Calculate filled percentage
+        if order['amount'] > 0:
+            order['filled_percent'] = (order['filled'] / order['amount']) * 100
+        else:
+            order['filled_percent'] = 0
+            
+        return order
     
     def normalize_account_id(self, raw_response: Dict[str, Any]) -> str:
-        return raw_response[0]['id']
+        """
+        Extract account ID from KuCoin API response.
+        
+        Args:
+            raw_response: Raw API response
+            
+        Returns:
+            Account ID string
+        """
+        data = raw_response.get('data', [])
+        if not data:
+            raise ValueError("No account data found in response")
+            
+        # Find the first trading account
+        for account in data:
+            if account.get('type') == 'trade':
+                return account['id']
+                
+        # If no trading account found, return the first account ID
+        return data[0]['id']

@@ -70,9 +70,12 @@ async def main():
         exchanges["KUCOIN"] = kucoin
         
         # Additional exchanges through CCXT
-        additional_exchanges = os.getenv("ADDITIONAL_EXCHANGES", "").split(",")
+        additional_exchanges = []
+        additional_exchanges_env = os.getenv("ADDITIONAL_EXCHANGES", "").strip()
+        if additional_exchanges_env:
+            additional_exchanges = [ex.strip().lower() for ex in additional_exchanges_env.split(",") if ex.strip()]
+            
         for exchange_id in additional_exchanges:
-            exchange_id = exchange_id.strip().lower()
             if exchange_id and exchange_id not in ['binance', 'kucoin']:  # Skip those we have native implementations for
                 try:
                     logger.info(f"Initializing CCXT connector for {exchange_id}")
@@ -93,8 +96,10 @@ async def main():
                         **extra_params
                     )
                     exchanges[exchange_id.upper()] = ccxt_exchange
+                    logger.info(f"Successfully added {exchange_id.upper()} exchange")
                 except Exception as e:
                     logger.error(f"Failed to initialize CCXT connector for {exchange_id}: {str(e)}")
+                    logger.info(f"Skipping {exchange_id} exchange")
         
         # Initialize arbitrage engine
         logger.info("Initializing Arbitrage Engine")
