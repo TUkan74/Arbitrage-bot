@@ -101,6 +101,10 @@ async def main():
                     logger.error(f"Failed to initialize CCXT connector for {exchange_id}: {str(e)}")
                     logger.info(f"Skipping {exchange_id} exchange")
         
+        # Ensure all exchange sessions are initialized (aiohttp ClientSession)
+        logger.info("Initializing exchange sessions")
+        await asyncio.gather(*[ex.initialize() for ex in exchanges.values()])
+
         # Initialize arbitrage engine
         logger.info("Initializing Arbitrage Engine")
         engine = ArbitrageEngine(

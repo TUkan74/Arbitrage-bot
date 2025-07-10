@@ -4,6 +4,7 @@ Arbitrage Engine - Identifies and executes arbitrage opportunities across exchan
 
 import asyncio
 import time
+import inspect
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 import os
@@ -250,7 +251,14 @@ class ArbitrageEngine:
             return False
     
     async def _async_call(self, func, *args, **kwargs):
-        """Helper to call synchronous exchange methods asynchronously."""
+        """Helper to call exchange methods that may be sync or async.
+
+        If the provided function is a coroutine function, await it directly.
+        Otherwise, execute it in a thread pool executor to avoid blocking the event loop.
+        """
+        if inspect.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
     

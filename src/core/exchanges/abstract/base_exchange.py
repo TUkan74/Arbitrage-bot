@@ -1,14 +1,9 @@
 import time
 from abc import abstractmethod
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, Optional, Any
 from .exchange_interface import ExchangeInterface
 import aiohttp
 import asyncio
-from datetime import datetime
-import hmac
-import hashlib
-import json
-from urllib.parse import urlencode
 from utils.logger import Logger
 from dotenv import load_dotenv
 import os
@@ -120,10 +115,19 @@ class BaseExchange(ExchangeInterface):
         try:
             if response.content_type == 'application/json':
                 data = await response.json()
-                if isinstance(data, dict) and ('error' in data or 'code' in data):
-                    error_msg = data.get('error') or data.get('msg') or str(data)
-                    self.logger.error(f"Exchange Error: {error_msg}")
-                    raise Exception(f"Exchange Error: {error_msg}")
+                if isinstance(data, dict):
+                    # Some exchanges (e.g., KuCoin) always return a numeric `code` field.
+                    # Treat only non-success codes as errors.
+                    success_codes = {0, '0', 200000, '200000', 'success', True}
+
+                    has_error_field = 'error' in data or 'msg' in data
+                    code_val = data.get('code')
+                    is_error_code = code_val is not None and code_val not in success_codes
+
+                    if has_error_field or is_error_code:
+                        error_msg = data.get('error') or data.get('msg') or str(data)
+                        self.logger.error(f"Exchange Error: {error_msg}")
+                        raise Exception(f"Exchange Error: {error_msg}")
         except ValueError:
             pass  # Not JSON response, ignore
     
