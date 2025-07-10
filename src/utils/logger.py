@@ -1,4 +1,5 @@
 import datetime
+import os
 
 class Logger:
     # Define color codes as class constants
@@ -8,10 +9,49 @@ class Logger:
         "INFO": "",            # Default terminal color
         "DEBUG": "\033[94m"    # Blue
     }
-    
-    def __init__(self, type: str, use_colors_in_file: bool = False):
+
+    # Numeric severity mapping for easy comparison
+    LEVELS = {
+        "DEBUG": 10,
+        "INFO": 20,
+        "WARNING": 30,
+        "ERROR": 40,
+    }
+
+    def __init__(self, type: str, use_colors_in_file: bool = False, log_level: str = None):
         self.type = type
         self.use_colors_in_file = use_colors_in_file
+
+        # Determine minimum log level (env var overrides default)
+        raw_env_level = os.getenv("LOG_LEVEL", "")
+
+        def _level_value(level_input):
+            """Convert a level name or number string/int to numeric value.
+
+            Accepts values like "INFO", "20", or "20 # INFO" (commented)."""
+            if level_input is None:
+                return None
+            # Numeric input
+            if isinstance(level_input, int):
+                return level_input
+            if isinstance(level_input, str):
+                # Remove inline comments and whitespace
+                cleaned = level_input.split('#', 1)[0].strip()
+                if cleaned.isdigit():
+                    return int(cleaned)
+                return self.LEVELS.get(cleaned.upper())
+            return None
+
+        chosen_value = (_level_value(log_level) or
+                        _level_value(raw_env_level) or
+                        self.LEVELS["DEBUG"])
+
+        # Fallback if unknown numeric value: round up to nearest valid threshold
+        if chosen_value not in self.LEVELS.values():
+            # choose next highest level above provided value
+            chosen_value = min((v for v in self.LEVELS.values() if v >= chosen_value), default=self.LEVELS["DEBUG"])
+
+        self.min_level = chosen_value
         if self.type == "exchange":
             self.file_path = "logs/exchanges/exchange.log"  
         elif self.type == "arbitrage":
@@ -55,6 +95,10 @@ class Logger:
             level: The log level (ERROR, WARNING, INFO, DEBUG)
             message: The message to log
         """
+        # Respect minimum log level; skip messages below threshold as fast as possible
+        if self.LEVELS.get(level, 10) < self.min_level:
+            return
+
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Get color code for this level
