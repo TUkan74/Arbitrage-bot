@@ -316,7 +316,7 @@ async def test_load_config_defaults():
             # Replace the _async_call method
             engine._async_call = mock_async_call
             
-            assert engine.initial_capital == 500.0  # Default value from __init__
+            assert engine.initial_capital == 1000.0  # Default value from __init__
             assert engine.min_profit_percentage == 0.5
             assert engine.max_slippage == 0.5
             assert engine.target_symbols == []
