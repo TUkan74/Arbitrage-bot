@@ -231,7 +231,7 @@ class ArbitrageEngine:
             
             # Only log the error the first time it occurs
             if len(self.failed_symbols[exchange_name]) <= 10:
-                self.logger.error(f"Failed to update order book for {exchange_name} {symbol}: {str(e)}")
+                self.logger.debug(f"Failed to update order book for {exchange_name} {symbol}: {str(e)}")
             elif len(self.failed_symbols[exchange_name]) == 11:
                 self.logger.warning(f"Suppressing further order book errors for {exchange_name} (too many to log)")
             

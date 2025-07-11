@@ -109,7 +109,7 @@ class BaseExchange(ExchangeInterface):
         if response.status != 200:
             error_text = await response.text()
             error_msg = f"API Error: {response.status} - {error_text}"
-            self.logger.error(error_msg)
+            self.logger.debug(error_msg)
             raise Exception(error_msg)
             
         try:
