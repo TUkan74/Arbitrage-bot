@@ -23,6 +23,7 @@ class ArbitrageEngine:
         initial_capital: float = 1000.0,
         min_profit_percentage: float = 0.5,
         max_slippage: float = 0.5,
+        max_profit_percentage: float = 100.0,
         target_symbols: Optional[List[str]] = None,
         start_rank: int = 100,
         end_rank: int = 1500,
@@ -44,6 +45,7 @@ class ArbitrageEngine:
         self.initial_capital = initial_capital
         self.min_profit_percentage = min_profit_percentage
         self.max_slippage = max_slippage
+        self.max_profit_percentage = max_profit_percentage
         self.target_symbols = target_symbols or []
         self.start_rank = start_rank
         self.end_rank = end_rank
@@ -79,6 +81,8 @@ class ArbitrageEngine:
         self.initial_capital = float(os.getenv('ARBITRAGE_INITIAL_CAPITAL', self.initial_capital))
         self.min_profit_percentage = float(os.getenv('ARBITRAGE_MIN_PROFIT', self.min_profit_percentage))
         self.max_slippage = float(os.getenv('ARBITRAGE_MAX_SLIPPAGE', self.max_slippage))
+        # Upper-bound profit to filter obvious false positives
+        self.max_profit_percentage = float(os.getenv('ARBITRAGE_MAX_PROFIT', self.max_profit_percentage))
         
         # Load target symbols if specified
         symbols_env = os.getenv('ARBITRAGE_TARGET_SYMBOLS')
@@ -479,6 +483,13 @@ class ArbitrageEngine:
                         f"Buy slippage: {buy_slippage:.2%}, Sell slippage: {sell_slippage:.2%}"
                     )
                     
+                    # Discard opportunities with unrealistically high profit (likely false positives)
+                    if profit_percentage >= self.max_profit_percentage:
+                        self.logger.debug(
+                            f"Discarding {symbol} opportunity ({buy_exchange}->{sell_exchange}) – calculated profit {profit_percentage:.2f}% exceeds max allowed {self.max_profit_percentage:.2f}%"
+                        )
+                        continue
+
                     # Check if profitable enough and slippage is acceptable
                     if (profit_percentage >= self.min_profit_percentage and 
                         buy_slippage <= self.max_slippage/100 and 
