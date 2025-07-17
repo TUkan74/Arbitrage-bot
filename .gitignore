@@ -59,3 +59,9 @@ testing/*
 logs/*
 .pytest_cache/*
 *.egg-info/*
+
+# Docs  
+*.pdf
+*.mmd
+*.csv
+*.tex
