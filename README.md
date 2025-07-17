@@ -74,12 +74,7 @@ All variables have sensible defaults; omit any you don’t care to tweak.
 
 ## Running the Bot
 ```bash
-# Activate the virtual environment (optional but handy)
-poetry shell
-
 # Start scanning (Ctrl-C to stop)
-python src/main.py
-# or, without entering the shell
 poetry run python src/main.py
 ```
 
