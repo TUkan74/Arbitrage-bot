@@ -10,15 +10,18 @@ This README explains how to configure and use the arbitrage bot in Phase 2, whic
 - Telegram notifications for arbitrage opportunities
 - Modular design with easy extensibility
 
+## Prerequisites
+
+- Python 3.11+ (recommended for best compatibility)
+- Poetry (Python package manager)
+
 ## Setup
 
 1. Clone the repository
-2. Create a virtual environment and install dependencies:
+2. Install dependencies using Poetry:
 
 ```bash
-python -m venv arb_bot_venv
-source arb_bot_venv/bin/activate  # On Windows: arb_bot_venv\Scripts\activate
-pip install -r requirements.txt
+poetry install
 ```
 
 3. Copy `env.example` to `.env` and configure your settings
@@ -71,7 +74,7 @@ TELEGRAM_CHAT_ID=your_telegram_chat_id
 Run the bot with:
 
 ```bash
-python src/phase_2_main.py
+poetry run python src/main.py
 ```
 
 The bot will:
@@ -79,6 +82,33 @@ The bot will:
 2. Load trading pairs from configuration or discover common pairs across exchanges
 3. Start scanning for arbitrage opportunities
 4. Send notifications through Telegram if enabled
+
+## Development
+
+### Installing Dependencies
+
+By default, `poetry install` will install all dependencies including development ones. If you want to install only production dependencies:
+
+```bash
+poetry install --without dev
+```
+
+### Managing Dependencies
+
+Add a new dependency:
+```bash
+poetry add package_name
+```
+
+Add a development dependency:
+```bash
+poetry add --group dev package_name
+```
+
+Update dependencies:
+```bash
+poetry update
+```
 
 ## Adding More Exchanges
 
@@ -103,7 +133,7 @@ For better performance and additional features, you can create custom exchange c
 1. Create a directory in `src/core/exchanges/your_exchange_name/`
 2. Implement an exchange class that extends BaseExchange
 3. Create a normalizer that extends ResponseNormalizer
-4. Add the connector to `phase_2_main.py`
+4. Add the connector to `main.py`
 
 ## Telegram Notifications
 
@@ -123,8 +153,48 @@ TELEGRAM_CHAT_ID=your_chat_id
 Run the tests with:
 
 ```bash
-pytest
+poetry run pytest
 ```
+
+For test coverage:
+```bash
+poetry run pytest --cov=src tests/
+```
+
+## Poetry Environment
+
+Poetry manages its own virtual environment. You can:
+
+- Activate the virtual environment:
+  ```bash
+  poetry shell
+  ```
+- Run a one-off command:
+  ```bash
+  poetry run python your_script.py
+  ```
+- List installed packages:
+  ```bash
+  poetry show
+  ```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Poetry Environment Issues**
+   If you see issues with the Poetry environment, try:
+   ```bash
+   poetry env remove python
+   poetry install
+   ```
+
+2. **Package Installation Issues**
+   If you encounter issues with package installation:
+   ```bash
+   poetry cache clear . --all
+   poetry install
+   ```
 
 ## Limitations
 

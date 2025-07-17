@@ -103,7 +103,7 @@ class CcxtExchange(BaseExchange):
             order_book = self.exchange.fetch_order_book(symbol, limit)
             return self.normalizer.normalize_order_book(symbol, order_book)
         except Exception as e:
-            self.logger.error(f"Error getting order book for {symbol}: {str(e)}")
+            self.logger.debug(f"Error getting order book for {symbol}: {str(e)}")
             raise
     
     def get_balance(self) -> Dict[str, float]:

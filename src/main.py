@@ -35,13 +35,13 @@ def send_telegram_message(bot_token, chat_id, message):
 
 async def main():
     """
-    Main entry point for Phase 2 of the arbitrage bot.
+    Main entry point for the arbitrage bot.
     Initializes exchange connectors, sets up the arbitrage engine,
     and starts scanning for opportunities.
     """
     # Setup logger
     logger = Logger("main")
-    logger.info("Starting Arbitrage Bot - Phase 2")
+    logger.info("Starting Arbitrage Bot")
     
     # Load environment variables
     load_dotenv()
@@ -70,9 +70,12 @@ async def main():
         exchanges["KUCOIN"] = kucoin
         
         # Additional exchanges through CCXT
-        additional_exchanges = os.getenv("ADDITIONAL_EXCHANGES", "").split(",")
+        additional_exchanges = []
+        additional_exchanges_env = os.getenv("ADDITIONAL_EXCHANGES", "").strip()
+        if additional_exchanges_env:
+            additional_exchanges = [ex.strip().lower() for ex in additional_exchanges_env.split(",") if ex.strip()]
+            
         for exchange_id in additional_exchanges:
-            exchange_id = exchange_id.strip().lower()
             if exchange_id and exchange_id not in ['binance', 'kucoin']:  # Skip those we have native implementations for
                 try:
                     logger.info(f"Initializing CCXT connector for {exchange_id}")
@@ -93,9 +96,15 @@ async def main():
                         **extra_params
                     )
                     exchanges[exchange_id.upper()] = ccxt_exchange
+                    logger.info(f"Successfully added {exchange_id.upper()} exchange")
                 except Exception as e:
                     logger.error(f"Failed to initialize CCXT connector for {exchange_id}: {str(e)}")
+                    logger.info(f"Skipping {exchange_id} exchange")
         
+        # Ensure all exchange sessions are initialized (aiohttp ClientSession)
+        logger.info("Initializing exchange sessions")
+        await asyncio.gather(*[ex.initialize() for ex in exchanges.values()])
+
         # Initialize arbitrage engine
         logger.info("Initializing Arbitrage Engine")
         engine = ArbitrageEngine(
@@ -103,7 +112,9 @@ async def main():
             initial_capital=float(os.getenv("ARBITRAGE_INITIAL_CAPITAL", 1000.0)),
             min_profit_percentage=float(os.getenv("ARBITRAGE_MIN_PROFIT", 0.5)),
             max_slippage=float(os.getenv("ARBITRAGE_MAX_SLIPPAGE", 0.5)),
-            target_symbols=os.getenv("ARBITRAGE_TARGET_SYMBOLS", "ETH/USDT,BTC/USDT").split(",") if os.getenv("ARBITRAGE_TARGET_SYMBOLS") else None
+            target_symbols=os.getenv("ARBITRAGE_TARGET_SYMBOLS", "").split(",") if os.getenv("ARBITRAGE_TARGET_SYMBOLS") else None,
+            start_rank=int(os.getenv("ARBITRAGE_START_RANK", "100")),
+            end_rank=int(os.getenv("ARBITRAGE_END_RANK", "1500"))
         )
         
         # Hook for sending Telegram notifications on opportunities
@@ -137,6 +148,7 @@ async def main():
         raise
     finally:
         logger.info("Shutting down Arbitrage Bot")
+        
 
 if __name__ == "__main__":
     # Run the async main function
