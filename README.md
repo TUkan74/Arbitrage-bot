@@ -23,7 +23,7 @@ Built with Python 3.11+, [Poetry](https://python-poetry.org/) for dependency man
 ## Installation
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/arbitrage-bot.git
+git clone https://github.com/TUkan74/arbitrage-bot.git
 cd arbitrage-bot
 
 # Install Poetry if missing
