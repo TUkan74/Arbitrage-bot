@@ -39,7 +39,9 @@ async def send_telegram_message(bot_token, chat_id, message, session: Optional[a
             if response.status != 200 or not data.get("ok", True):
                 print(f"Error sending Telegram message: {data}")
             return data
-    except aiohttp.ClientError as e:
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
         print(f"Error sending Telegram message: {e}")
         return None
     finally:
