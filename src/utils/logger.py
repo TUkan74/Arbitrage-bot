@@ -53,7 +53,7 @@ class Logger:
 
         self.min_level = chosen_value
         if self.type == "exchange":
-            self.file_path = "logs/exchanges/exchange.log"  
+            self.file_path = "logs/exchanges/exchange.log"
         elif self.type == "arbitrage":
             self.file_path = "logs/arbitrage/arbitrage.log"
         elif self.type == "trades":
@@ -62,18 +62,29 @@ class Logger:
             self.file_path = "logs/main/main.log"
         elif self.type == "cmc":
             self.file_path = "logs/cmc/cmc.log"
-        self.clear_log()
+
+        self._ensure_log_file()
     
     # # # # # # # # # # 
     # General methods # 
     # # # # # # # # # # 
 
+    def _ensure_log_file(self):
+        """Ensure the log file and its parent directory exist without truncating."""
+        directory = os.path.dirname(self.file_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+        if not os.path.exists(self.file_path):
+            # Touch the file so subsequent appends succeed even if the directory existed.
+            with open(self.file_path, "a"):
+                pass
+
     def log(self, message: str):
         try:
             # Ensure directory exists
-            import os
             os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-            
+
             # Append to log file
             with open(self.file_path, "a") as log_file:
                 log_file.write(f"{message}\n")
