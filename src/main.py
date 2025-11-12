@@ -8,7 +8,9 @@ then starts the main scanning loop to identify arbitrage opportunities.
 
 import asyncio
 import os
-import requests
+from typing import Optional
+
+import aiohttp
 from dotenv import load_dotenv
 
 from core.exchanges.binance import BinanceExchange
@@ -18,20 +20,33 @@ from core.arbitrage.engine import ArbitrageEngine
 from utils.logger import Logger
 
 # Telegram notification support
-def send_telegram_message(bot_token, chat_id, message):
-    """Send a message to a Telegram chat"""
+async def send_telegram_message(bot_token, chat_id, message, session: Optional[aiohttp.ClientSession] = None):
+    """Send a message to a Telegram chat asynchronously."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         'chat_id': chat_id,
         'text': message,
         'parse_mode': 'Markdown'
     }
+    should_close = False
+    if session is None:
+        session = aiohttp.ClientSession()
+        should_close = True
+
     try:
-        response = requests.post(url, json=payload)
-        return response.json()
+        async with session.post(url, json=payload) as response:
+            data = await response.json()
+            if response.status != 200 or not data.get("ok", True):
+                print(f"Error sending Telegram message: {data}")
+            return data
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         print(f"Error sending Telegram message: {e}")
         return None
+    finally:
+        if should_close:
+            await session.close()
 
 async def main():
     """
@@ -55,9 +70,11 @@ async def main():
         logger.warning("Telegram notifications enabled but missing bot token or chat ID")
         telegram_enabled = False
     
+    exchanges = {}
+    telegram_session: Optional[aiohttp.ClientSession] = None
+
     try:
         # Initialize exchange connectors
-        exchanges = {}
         
         # Binance Exchange
         logger.info("Initializing Binance exchange connector")
@@ -119,6 +136,8 @@ async def main():
         
         # Hook for sending Telegram notifications on opportunities
         if telegram_enabled:
+            telegram_session = aiohttp.ClientSession()
+
             # Create a custom callback for the engine to report opportunities
             async def opportunity_callback(opportunity):
                 message = (
@@ -130,7 +149,12 @@ async def main():
                     f"*Buy slippage:* {opportunity['buy_slippage']:.2%}\n"
                     f"*Sell slippage:* {opportunity['sell_slippage']:.2%}"
                 )
-                send_telegram_message(telegram_bot_token, telegram_chat_id, message)
+                await send_telegram_message(
+                    telegram_bot_token,
+                    telegram_chat_id,
+                    message,
+                    session=telegram_session,
+                )
             
             # Set the callback in the engine
             engine.opportunity_callback = opportunity_callback
@@ -148,8 +172,17 @@ async def main():
         raise
     finally:
         logger.info("Shutting down Arbitrage Bot")
+
+        if exchanges:
+            await asyncio.gather(
+                *(ex.close() for ex in exchanges.values()),
+                return_exceptions=True,
+            )
+
+        if telegram_session is not None:
+            await telegram_session.close()
         
 
 if __name__ == "__main__":
     # Run the async main function
-    asyncio.run(main()) 
+    asyncio.run(main())
