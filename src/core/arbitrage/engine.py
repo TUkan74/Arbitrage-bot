@@ -7,6 +7,7 @@ import time
 import inspect
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
@@ -61,6 +62,10 @@ class ArbitrageEngine:
         # Track failed symbols to avoid repeated errors
         self.failed_symbols = {}  # Exchange -> set of failed symbols
         self.last_fee_update = 0
+
+        # Cooldown tracking for symbols that encounter repeated errors
+        self.symbol_retry_cooldowns: Dict[str, datetime] = {}
+        self.symbol_cooldown_seconds = float(kwargs.get('symbol_cooldown_seconds', 30.0))
         
         # Performance tracking
         self.opportunities_found = 0
@@ -83,6 +88,9 @@ class ArbitrageEngine:
         self.max_slippage = float(os.getenv('ARBITRAGE_MAX_SLIPPAGE', self.max_slippage))
         # Upper-bound profit to filter obvious false positives
         self.max_profit_percentage = float(os.getenv('ARBITRAGE_MAX_PROFIT', self.max_profit_percentage))
+        self.symbol_cooldown_seconds = float(
+            os.getenv('ARBITRAGE_SYMBOL_COOLDOWN_SECONDS', self.symbol_cooldown_seconds)
+        )
         
         # Load target symbols if specified
         symbols_env = os.getenv('ARBITRAGE_TARGET_SYMBOLS')
@@ -172,9 +180,11 @@ class ArbitrageEngine:
         
         # Update order books for non-failed symbols
         for symbol in self.target_symbols:
+            if self._is_symbol_in_cooldown(symbol):
+                continue
             for exchange_name, exchange in self.exchanges.items():
                 # Skip symbols that have failed for this exchange
-                if (exchange_name in self.failed_symbols and 
+                if (exchange_name in self.failed_symbols and
                     symbol in self.failed_symbols[exchange_name]):
                     continue
                     
@@ -202,7 +212,7 @@ class ArbitrageEngine:
         """Fetch and cache order book for a symbol on an exchange with better error handling."""
         try:
             order_book = await self._async_call(exchange.get_order_book, symbol)
-            
+
             # Check if the order book is valid (has bids and asks)
             if not order_book.get('bids') or not order_book.get('asks'):
                 # Empty order book, log but don't count as error
@@ -212,12 +222,15 @@ class ArbitrageEngine:
             # Cache the result with timestamp
             if symbol not in self.order_books_cache:
                 self.order_books_cache[symbol] = {}
-            
+
             self.order_books_cache[symbol][exchange_name] = {
                 'data': order_book,
                 'timestamp': time.time()
             }
-            
+
+            # Successful update clears any cooldown state for this symbol
+            self.symbol_retry_cooldowns.pop(symbol, None)
+
             # Log the mid-price of the order book (average of best bid and ask)
             bid = order_book['bids'][0][0] if order_book['bids'] else 0
             ask = order_book['asks'][0][0] if order_book['asks'] else 0
@@ -230,9 +243,17 @@ class ArbitrageEngine:
             # Track failed symbols
             if exchange_name not in self.failed_symbols:
                 self.failed_symbols[exchange_name] = set()
-                
+
             self.failed_symbols[exchange_name].add(symbol)
-            
+
+            # Record the earliest retry time for this symbol
+            retry_time = datetime.utcnow() + timedelta(seconds=self.symbol_cooldown_seconds)
+            self.symbol_retry_cooldowns[symbol] = retry_time
+
+            self.logger.debug(
+                f"Cooldown set for {symbol} until {retry_time.isoformat()} after {exchange_name} failure"
+            )
+
             # Only log the error the first time it occurs
             if len(self.failed_symbols[exchange_name]) <= 10:
                 self.logger.debug(f"Failed to update order book for {exchange_name} {symbol}: {str(e)}")
@@ -404,17 +425,22 @@ class ArbitrageEngine:
     async def scan_opportunities(self) -> List[Dict[str, Any]]:
         """
         Scan for arbitrage opportunities across all exchanges and symbols.
-        
+
         Returns:
             List of opportunity dictionaries
         """
         opportunities = []
         total_comparisons = 0
         price_favorable_count = 0
-        
+
         self.logger.info(f"Scanning {len(self.target_symbols)} symbols across {len(self.exchanges)} exchanges for arbitrage opportunities")
-        
+
         for symbol in self.target_symbols:
+            if self._is_symbol_in_cooldown(symbol):
+                self.logger.debug(
+                    f"Skipping {symbol} scan - cooldown active until {self.symbol_retry_cooldowns[symbol].isoformat()}"
+                )
+                continue
             # Skip if we don't have order book data
             if symbol not in self.order_books_cache:
                 continue
@@ -530,6 +556,19 @@ class ArbitrageEngine:
         self.logger.info(f"Scan complete: {total_comparisons} comparisons, {price_favorable_count} favorable price differences, {len(opportunities)} viable opportunities")
         
         return opportunities
+
+    def _is_symbol_in_cooldown(self, symbol: str) -> bool:
+        """Check whether a symbol is currently in cooldown and purge expired cooldowns."""
+        retry_time = self.symbol_retry_cooldowns.get(symbol)
+        if not retry_time:
+            return False
+
+        now = datetime.utcnow()
+        if retry_time <= now:
+            self.symbol_retry_cooldowns.pop(symbol, None)
+            return False
+
+        return True
     
     async def execute_arbitrage(self, opportunity: Dict[str, Any]) -> bool:
         """
