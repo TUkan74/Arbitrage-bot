@@ -60,6 +60,10 @@ class ArbitrageEngine:
         
         # Track failed symbols to avoid repeated errors
         self.failed_symbols = {}  # Exchange -> set of failed symbols
+        self.failed_symbol_cooldowns = defaultdict(dict)
+        self.symbol_failure_counts = defaultdict(lambda: defaultdict(int))
+        self.max_symbol_failures = kwargs.get('max_symbol_failures', 1)
+        self.symbol_failure_cooldown = kwargs.get('symbol_failure_cooldown', 60.0)
         self.last_fee_update = 0
         
         # Performance tracking
@@ -174,8 +178,7 @@ class ArbitrageEngine:
         for symbol in self.target_symbols:
             for exchange_name, exchange in self.exchanges.items():
                 # Skip symbols that have failed for this exchange
-                if (exchange_name in self.failed_symbols and 
-                    symbol in self.failed_symbols[exchange_name]):
+                if self._should_skip_symbol(exchange_name, symbol):
                     continue
                     
                 tasks.append(self._async_update_order_book(exchange_name, exchange, symbol))
@@ -212,11 +215,13 @@ class ArbitrageEngine:
             # Cache the result with timestamp
             if symbol not in self.order_books_cache:
                 self.order_books_cache[symbol] = {}
-            
+
             self.order_books_cache[symbol][exchange_name] = {
                 'data': order_book,
                 'timestamp': time.time()
             }
+
+            self._record_symbol_success(exchange_name, symbol)
             
             # Log the mid-price of the order book (average of best bid and ask)
             bid = order_book['bids'][0][0] if order_book['bids'] else 0
@@ -230,8 +235,9 @@ class ArbitrageEngine:
             # Track failed symbols
             if exchange_name not in self.failed_symbols:
                 self.failed_symbols[exchange_name] = set()
-                
+
             self.failed_symbols[exchange_name].add(symbol)
+            self._record_symbol_failure(exchange_name, symbol)
             
             # Only log the error the first time it occurs
             if len(self.failed_symbols[exchange_name]) <= 10:
@@ -265,6 +271,57 @@ class ArbitrageEngine:
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+    def _should_skip_symbol(self, exchange_name: str, symbol: str) -> bool:
+        """Check if a symbol should be skipped due to cooldown."""
+        cooldowns = self.failed_symbol_cooldowns.get(exchange_name)
+        if not cooldowns:
+            return False
+
+        cooldown_until = cooldowns.get(symbol)
+        if cooldown_until is None:
+            return False
+
+        current_time = time.time()
+        if current_time < cooldown_until:
+            return True
+
+        # Cooldown expired - clean up state to allow retries
+        del cooldowns[symbol]
+        if not cooldowns:
+            del self.failed_symbol_cooldowns[exchange_name]
+
+        if exchange_name in self.failed_symbols and symbol in self.failed_symbols[exchange_name]:
+            self.failed_symbols[exchange_name].discard(symbol)
+            if not self.failed_symbols[exchange_name]:
+                del self.failed_symbols[exchange_name]
+
+        return False
+
+    def _record_symbol_success(self, exchange_name: str, symbol: str) -> None:
+        """Reset failure tracking when a symbol update succeeds."""
+        if exchange_name in self.symbol_failure_counts:
+            self.symbol_failure_counts[exchange_name][symbol] = 0
+
+        cooldowns = self.failed_symbol_cooldowns.get(exchange_name)
+        if cooldowns and symbol in cooldowns:
+            del cooldowns[symbol]
+            if not cooldowns:
+                del self.failed_symbol_cooldowns[exchange_name]
+
+        if exchange_name in self.failed_symbols and symbol in self.failed_symbols[exchange_name]:
+            self.failed_symbols[exchange_name].discard(symbol)
+            if not self.failed_symbols[exchange_name]:
+                del self.failed_symbols[exchange_name]
+
+    def _record_symbol_failure(self, exchange_name: str, symbol: str) -> None:
+        """Update failure tracking for a symbol and apply cooldown if needed."""
+        failure_counts = self.symbol_failure_counts[exchange_name]
+        failure_counts[symbol] += 1
+
+        if failure_counts[symbol] >= self.max_symbol_failures:
+            cooldown_until = time.time() + self.symbol_failure_cooldown
+            self.failed_symbol_cooldowns[exchange_name][symbol] = cooldown_until
     
     def estimate_slippage(self, order_book: Dict[str, Any], amount: float, side: str = 'buy') -> float:
         """
