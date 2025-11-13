@@ -444,15 +444,20 @@ class ArbitrageEngine:
                     buy_price = buy_book['asks'][0][0]
                     sell_price = sell_book['bids'][0][0]
                     
-                    # Log the price comparison
-                    self.logger.info(f"Comparing {symbol}: {buy_exchange} ask={buy_price} vs {sell_exchange} bid={sell_price}")
+                    # Log the price comparison at debug level to reduce noise
+                    self.logger.debug(
+                        f"Comparing {symbol}: {buy_exchange} ask={buy_price} vs {sell_exchange} bid={sell_price}"
+                    )
                     
                     # Check if there's potential profit (before fees/slippage)
                     direction = None
                     if sell_price > buy_price:
                         direction = "normal"
                         price_difference_pct = ((sell_price - buy_price) / buy_price) * 100
-                        self.logger.info(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
+                        self.logger.debug(
+                            f"Favorable price difference detected: {price_difference_pct:.2f}% - "
+                            f"Buy on {buy_exchange}, Sell on {sell_exchange}"
+                        )
                         price_favorable_count += 1
                     else:
                         # Check reverse direction
@@ -465,7 +470,10 @@ class ArbitrageEngine:
                             buy_exchange, sell_exchange = sell_exchange, buy_exchange
                             buy_price, sell_price = buy_price_reverse, sell_price_reverse
                             price_difference_pct = ((sell_price - buy_price) / buy_price) * 100
-                            self.logger.info(f"Favorable price difference detected: {price_difference_pct:.2f}% - Buy on {buy_exchange}, Sell on {sell_exchange}")
+                            self.logger.debug(
+                                f"Favorable price difference detected: {price_difference_pct:.2f}% - "
+                                f"Buy on {buy_exchange}, Sell on {sell_exchange}"
+                            )
                             price_favorable_count += 1
                         else:
                             # No opportunity in either direction
@@ -477,7 +485,7 @@ class ArbitrageEngine:
                     )
                     
                     # Log the detailed calculation results
-                    self.logger.info(
+                    self.logger.debug(
                         f"Calculated profit for {symbol} ({buy_exchange}->{sell_exchange}): "
                         f"${profit:.2f} ({profit_percentage:.2f}%) - "
                         f"Buy slippage: {buy_slippage:.2%}, Sell slippage: {sell_slippage:.2%}"
