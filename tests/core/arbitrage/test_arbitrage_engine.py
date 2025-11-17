@@ -5,6 +5,7 @@ Tests for the arbitrage engine.
 import pytest
 import asyncio
 import os
+import time
 from unittest.mock import MagicMock, patch
 import json
 
@@ -584,6 +585,119 @@ async def test_update_market_data_skip_failed_symbols():
         eth_book = engine.order_books_cache["ETH/USDT"]["BINANCE"]["data"]
         assert eth_book["bids"][0] == [2990.0, 1.0]
         assert eth_book["asks"][0] == [3010.0, 1.0]
+
+
+@pytest.mark.asyncio
+async def test_symbol_cooldown_after_consecutive_failures(monkeypatch):
+    """Ensure symbols with consecutive failures respect the cooldown before retrying."""
+    async with MockExchange("BINANCE") as binance:
+        current_time = 1000.0
+
+        def fake_time():
+            return current_time
+
+        monkeypatch.setattr("core.arbitrage.engine.time.time", fake_time)
+
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"],
+            symbol_failure_cooldown=30,
+            max_symbol_failures=1,
+        )
+
+        # Avoid triggering trading fee updates during the test
+        engine.trading_fees_cache = {"BINANCE": {}}
+        engine.last_fee_update = fake_time()
+
+        call_count = 0
+
+        async def failing_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise Exception("API Error")
+
+        engine._async_call = failing_call
+
+        # First attempt fails and places the symbol on cooldown
+        await engine._update_market_data()
+        assert call_count == 1
+        assert "BINANCE" in engine.failed_symbols
+        assert "BTC/USDT" in engine.failed_symbols["BINANCE"]
+
+        cooldowns = engine.failed_symbol_cooldowns["BINANCE"]
+        assert cooldowns["BTC/USDT"] == pytest.approx(current_time + engine.symbol_failure_cooldown)
+
+        # Second attempt occurs before cooldown expiry and should be skipped
+        await engine._update_market_data()
+        assert call_count == 1
+
+        # Advance time beyond the cooldown to allow another attempt
+        current_time += engine.symbol_failure_cooldown + 1
+
+        await engine._update_market_data()
+        assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_symbol_success_resets_cooldown(monkeypatch):
+    """Ensure a successful update immediately re-enables the symbol."""
+    async with MockExchange("BINANCE") as binance:
+        current_time = 2000.0
+
+        def fake_time():
+            return current_time
+
+        monkeypatch.setattr("core.arbitrage.engine.time.time", fake_time)
+
+        engine = ArbitrageEngine(
+            exchanges={"BINANCE": binance},
+            target_symbols=["BTC/USDT"],
+            symbol_failure_cooldown=30,
+            max_symbol_failures=1,
+        )
+
+        engine.trading_fees_cache = {"BINANCE": {}}
+        engine.last_fee_update = fake_time()
+
+        outcomes = [
+            Exception("API Error"),
+            {
+                "symbol": "BTC/USDT",
+                "bids": [[49990.0, 1.0]],
+                "asks": [[50010.0, 1.0]],
+            },
+            {
+                "symbol": "BTC/USDT",
+                "bids": [[49995.0, 1.0]],
+                "asks": [[50005.0, 1.0]],
+            },
+        ]
+
+        async def stub_async_call(*args, **kwargs):
+            result = outcomes.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        engine._async_call = stub_async_call
+
+        # Initial failure starts the cooldown timer
+        await engine._update_market_data()
+        assert "BINANCE" in engine.failed_symbols
+        assert "BTC/USDT" in engine.failed_symbols["BINANCE"]
+
+        # Allow cooldown to expire and process successfully
+        current_time += engine.symbol_failure_cooldown + 1
+        await engine._update_market_data()
+
+        # Symbol should be cleared from cooldown tracking after success
+        assert "BINANCE" not in engine.failed_symbol_cooldowns or "BTC/USDT" not in engine.failed_symbol_cooldowns.get("BINANCE", {})
+        assert "BTC/USDT" not in engine.failed_symbols.get("BINANCE", set())
+        assert engine.symbol_failure_counts["BINANCE"]["BTC/USDT"] == 0
+
+        # Without advancing time, the symbol should be processed again immediately
+        await engine._update_market_data()
+        assert not outcomes
 
 @pytest.mark.asyncio
 async def test_async_call_retry():
